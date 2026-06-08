@@ -8,12 +8,4 @@ public record DonacionDTO(
         String depositoID,
         String descripcion,
         List<DetalleProductoDTO> detallesProductosDTO,
-        EstadoDonacionEnum estado
-) {
-    public DonacionDTO(String id, String donadorID, String depositoID, String descripcion,
-                       String productoID, Integer cantidad, EstadoDonacionEnum estado) {
-        this(id, donadorID, depositoID, descripcion,
-                List.of(new DetalleProductoDTO("auto-gen", productoID, cantidad)),
-                estado);
-    }
-}
+        EstadoDonacionEnum estado){}
