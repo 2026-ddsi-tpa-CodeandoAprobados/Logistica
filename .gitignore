@@ -1,0 +1,11 @@
+# Archivos de IntelliJ
+.idea/
+*.iml
+
+# Archivos de compilación
+target/
+
+# Logs y otros
+*.log
+.DS_Store
+

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<suppressions>
+  <!-- Excluir reglas de Javadoc -->
+  <suppress checks="JavadocType"
+            files=".*\.java"
+  />
+  <suppress checks="JavadocMethod"
+            files=".*\.java"
+  />
+  <suppress checks="JavadocVariable"
+            files=".*\.java"
+  />
+  <suppress checks="JavadocStyle"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de package-info.java -->
+  <suppress checks="JavadocPackage"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de DesignForExtension -->
+  <suppress checks="DesignForExtension"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de FinalParameters -->
+  <suppress checks="FinalParameters"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de LineLength -->
+  <suppress checks="LineLength"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de AvoidStarImport -->
+  <suppress checks="AvoidStarImport"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de HiddenField -->
+  <suppress checks="HiddenField"
+            files=".*\.java"
+  />
+
+  <!-- Excluir regla de HideUtilityClassConstructor -->
+  <suppress checks="HideUtilityClassConstructor"
+            files=".*\.java"
+  />
+</suppressions>
