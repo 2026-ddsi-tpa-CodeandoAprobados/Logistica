@@ -16,11 +16,6 @@
 * Despliegue en Render: **[https://tpa-logistica-spinelliriso.onrender.com](https://tpa-logistica-spinelliriso.onrender.com)**
 * SwaggerHub: [DonaTrack-Logistica-SpinelliRiso](https://app.swaggerhub.com/apis/utn-6f8/DonaTrack-Logistica-SpinelliRiso/1.0.0)
 
-
-**Aclaración:**
-Como forma de documentación de los casos de uso (bodys), decidí agregar la colección de los 'Postman' en la carpeta /docs/postman.
----
-
 ### ⚠️ Importante
 
 **ARCHIVOS PROTEGIDOS:**
