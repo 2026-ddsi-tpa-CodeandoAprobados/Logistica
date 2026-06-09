@@ -16,9 +16,6 @@ public interface FachadaLogistica {
 
   DepositoDTO gestionarDonacion(DonacionDTO donacion) throws NoSuchElementException;
 
-  DepositoDTO gestionarDonacion(String depositoID, String donacionID, String productoID, Integer cantidad)
-          throws NoSuchElementException;
-
   void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo);
 
   AsignacionDTO ejecutarMatchmaking(

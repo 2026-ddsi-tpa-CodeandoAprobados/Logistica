@@ -45,13 +45,6 @@ public class Fachada implements FachadaLogistica {
   }
 
   @Override
-  public DepositoDTO gestionarDonacion(String depositoID, String donacionID, String productoID, Integer cantidad) {
-    DetalleProductoDTO detalle = new DetalleProductoDTO("auto-gen", productoID, cantidad);
-    DonacionDTO donacionDTO = new DonacionDTO(donacionID, "test-user", depositoID, "Donación vieja", List.of(detalle), EstadoDonacionEnum.INGRESADA);
-    return this.gestionarDonacion(donacionDTO);
-  }
-
-  @Override
   public DepositoDTO gestionarDonacion(DonacionDTO donacionDTO) {
     if (donacionDTO == null || donacionDTO.detallesProductosDTO() == null || donacionDTO.detallesProductosDTO().isEmpty()) {
       throw new RuntimeException("La donación está vacía o es nula");
