@@ -13,8 +13,8 @@
 ---
 
 🧩 Link al despliegue en Render
-* Despliegue en Render: **[https://tpa-logistica-spinelliriso.onrender.com](https://tpa-logistica-spinelliriso.onrender.com)**
-* SwaggerHub: [DonaTrack-Logistica-SpinelliRiso](https://app.swaggerhub.com/apis/utn-6f8/DonaTrack-Logistica-SpinelliRiso/1.0.0)
+* Despliegue en Render: **[https://logistica-entrega3.onrender.com/](https://logistica-entrega3.onrender.com/)**
+* SwaggerHub: [DonaTrack-Logistica-SpinelliRiso](https://logistica-entrega3.onrender.com/swagger-ui/index.html)
 
 ### ⚠️ Importante
 
