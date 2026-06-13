@@ -12,12 +12,18 @@ import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaLogistica;
 import ar.edu.utn.dds.k3003.model.*;
 import ar.edu.utn.dds.k3003.repositories.*;
+import ar.edu.utn.dds.k3003.clients.DonacionesClient;
+import ar.edu.utn.dds.k3003.clients.EntidadesClient;
+import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 @Transactional
@@ -29,9 +35,10 @@ public class Fachada implements FachadaLogistica {
   @Autowired private Matchmaker matchmaker;
   @Autowired(required = false) private MeterRegistry meterRegistry;
 
+  @Autowired(required = false) private EntidadesClient entidadesClient;
+  @Autowired(required = false) private DonacionesClient donacionesClient;
+
   private Counter entregasCompletadasCounter;
-  private FachadaDonadoresYEntidades fachadaDonadores;
-  private FachadaDonaciones fachadaDonaciones;
 
   public Fachada() {}
 
@@ -63,16 +70,58 @@ public class Fachada implements FachadaLogistica {
     deposito.getStock().addAll(nuevosPaquetes);
     deposito = depositoRepository.save(deposito);
 
-    if (this.fachadaDonadores != null) {
-      nuevosPaquetes.forEach(paquete ->
-              this.fachadaDonadores.obtenerNecesidadesInsatisfechasDe(paquete.getExternalId())
-      );
+    // Consulta de necesidades al módulo de Entidades
+    if (this.entidadesClient != null) {
+      nuevosPaquetes.forEach(paquete -> {
+        try {
+          this.entidadesClient.getAllNecesidadesDeUnProducto(paquete.getExternalId());
+        } catch (Exception e) {
+          System.err.println("Error de comunicación con módulo Entidades: " + e.getMessage());
+        }
+      });
     }
     return mapper.map(deposito);
   }
 
-  @Override public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) { this.fachadaDonadores = f; }
-  @Override public void setFachadaDonaciones(FachadaDonaciones f) { this.fachadaDonaciones = f; }
+  @Override
+  public void reportarEntrega(PaqueteDTO p) {
+    Asignacion a = asignacionRepository.findByPaqueteID(p.id()).orElseThrow();
+
+    // Satisfacer necesidad en el módulo de Entidades
+    if(this.entidadesClient != null) {
+      try {
+        Map<String, Integer> requestBody = new HashMap<>();
+        requestBody.put("cantidad", p.cantidad());
+        this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
+      } catch (Exception e) {
+        System.err.println("Error al notificar satisfacción al módulo Entidades: " + e.getMessage());
+      }
+    }
+
+    // Cambiar el estado en el módulo de Donaciones
+    if(this.donacionesClient != null) {
+      try {
+        EstadoDonacionRequest request = new EstadoDonacionRequest(EstadoDonacionEnum.ACEPTADA);
+        this.donacionesClient.actualizarEstadoDonacion(p.donacionID(), request);
+      } catch (Exception e) {
+        System.err.println("Error al actualizar estado en el módulo Donaciones: " + e.getMessage());
+      }
+    }
+
+    a.setEstado(EstadoAsginacionEnum.COMPLETADA);
+    asignacionRepository.save(a);
+
+    if(entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
+  }
+
+  @Override
+  public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) {
+  }
+
+  @Override
+  public void setFachadaDonaciones(FachadaDonaciones f) {
+  }
+
   @Override public DepositoDTO agregarDeposito(DepositoDTO dto) { return mapper.map(depositoRepository.save(mapper.map(dto))); }
   @Override public DepositoDTO buscarDepositoPorID(String id) { return mapper.map(depositoRepository.findById(Integer.valueOf(id)).orElseThrow()); }
   @Override public void setAlgoritmoMM(String id, TipoAlgoritmoEnum alg) {
@@ -83,14 +132,6 @@ public class Fachada implements FachadaLogistica {
   @Override public AsignacionDTO ejecutarMatchmaking(String id, PaqueteDTO p, List<NecesidadMaterialDTO> n) {
     NecesidadMaterialDTO e = matchmaker.calcularMejorOpcion(n);
     return mapper.map(asignacionRepository.save(new Asignacion(p.id(), e.id())));
-  }
-  @Override public void reportarEntrega(PaqueteDTO p) {
-    Asignacion a = asignacionRepository.findByPaqueteID(p.id()).orElseThrow();
-    if(this.fachadaDonadores != null) this.fachadaDonadores.satisfacerNecesidad(a.getNecesidadID(), p.cantidad());
-    if(this.fachadaDonaciones != null) this.fachadaDonaciones.cambiarEstadoDeDonacion(p.donacionID(), EstadoDonacionEnum.ACEPTADA);
-    a.setEstado(EstadoAsginacionEnum.COMPLETADA);
-    asignacionRepository.save(a);
-    if(entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
   }
   @Override public AsignacionDTO buscarAsignacionPorPaqueteID(String id) { return mapper.map(asignacionRepository.findByPaqueteID(id).orElseThrow()); }
   public List<DepositoDTO> buscarTodosLosDepositos() { return depositoRepository.findAll().stream().map(mapper::map).toList(); }
