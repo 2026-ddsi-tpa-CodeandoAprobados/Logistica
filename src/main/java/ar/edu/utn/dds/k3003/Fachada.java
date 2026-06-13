@@ -4,7 +4,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Counter;
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DonacionDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DetalleProductoDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
@@ -18,6 +17,7 @@ import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
@@ -25,7 +25,7 @@ import java.util.NoSuchElementException;
 import java.util.HashMap;
 import java.util.Map;
 
-@Component
+@Service
 @Transactional
 public class Fachada implements FachadaLogistica {
 
@@ -76,7 +76,7 @@ public class Fachada implements FachadaLogistica {
         try {
           this.entidadesClient.getAllNecesidadesDeUnProducto(paquete.getExternalId());
         } catch (Exception e) {
-          System.err.println("Error de comunicación con módulo Entidades: " + e.getMessage());
+          System.err.println("Error al comunicarse con Entidades: " + e.getMessage());
         }
       });
     }
@@ -94,7 +94,7 @@ public class Fachada implements FachadaLogistica {
         requestBody.put("cantidad", p.cantidad());
         this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
       } catch (Exception e) {
-        System.err.println("Error al notificar satisfacción al módulo Entidades: " + e.getMessage());
+        System.err.println("Error al notificar satisfacción a Entidades: " + e.getMessage());
       }
     }
 
@@ -102,25 +102,19 @@ public class Fachada implements FachadaLogistica {
     if(this.donacionesClient != null) {
       try {
         EstadoDonacionRequest request = new EstadoDonacionRequest(EstadoDonacionEnum.ACEPTADA);
-        this.donacionesClient.actualizarEstadoDonacion(p.donacionID(), request);
+        this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
       } catch (Exception e) {
-        System.err.println("Error al actualizar estado en el módulo Donaciones: " + e.getMessage());
+        System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
       }
     }
 
     a.setEstado(EstadoAsginacionEnum.COMPLETADA);
     asignacionRepository.save(a);
-
     if(entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
   }
 
-  @Override
-  public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) {
-  }
-
-  @Override
-  public void setFachadaDonaciones(FachadaDonaciones f) {
-  }
+  @Override public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) {}
+  @Override public void setFachadaDonaciones(FachadaDonaciones f) {}
 
   @Override public DepositoDTO agregarDeposito(DepositoDTO dto) { return mapper.map(depositoRepository.save(mapper.map(dto))); }
   @Override public DepositoDTO buscarDepositoPorID(String id) { return mapper.map(depositoRepository.findById(Integer.valueOf(id)).orElseThrow()); }
