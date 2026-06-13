@@ -105,7 +105,7 @@ public class Fachada implements FachadaLogistica {
     //Cambiar el estado en el módulo de Donaciones
     if(this.donacionesClient != null) {
       try {
-        EstadoDonacionRequest request = new EstadoDonacionRequest(EstadoDonacionEnum.ACEPTADA);
+        EstadoDonacionRequest request = new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
         this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
       } catch (Exception e) {
         System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
