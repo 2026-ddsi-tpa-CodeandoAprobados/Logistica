@@ -16,7 +16,6 @@ import ar.edu.utn.dds.k3003.clients.EntidadesClient;
 import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
@@ -62,8 +61,13 @@ public class Fachada implements FachadaLogistica {
 
     List<Paquete> nuevosPaquetes = donacionDTO.detallesProductosDTO().stream()
             .map(detalle -> {
-              if (detalle.cantidad() <= 0) throw new RuntimeException("Cantidad inválida");
-              return new Paquete(donacionDTO.id(), detalle.productoId(), detalle.cantidad());
+              if (detalle.cantidadProducto() == null) {
+                throw new RuntimeException("La cantidad del producto es obligatoria");
+              }
+              if (detalle.cantidadProducto() <= 0) {
+                throw new RuntimeException("Cantidad inválida");
+              }
+              return new Paquete(donacionDTO.id(), detalle.productoId(), detalle.cantidadProducto());
             })
             .toList();
 
@@ -98,7 +102,7 @@ public class Fachada implements FachadaLogistica {
       }
     }
 
-    // Cambiar el estado en el módulo de Donaciones
+    //Cambiar el estado en el módulo de Donaciones
     if(this.donacionesClient != null) {
       try {
         EstadoDonacionRequest request = new EstadoDonacionRequest(EstadoDonacionEnum.ACEPTADA);
