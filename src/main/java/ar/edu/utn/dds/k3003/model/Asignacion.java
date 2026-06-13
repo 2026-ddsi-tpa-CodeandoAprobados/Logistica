@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 @Entity
 public class Asignacion {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
     private String paqueteID;
     private String necesidadID;
