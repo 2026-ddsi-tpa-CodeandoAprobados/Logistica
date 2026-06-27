@@ -12,8 +12,7 @@ public class Paquete {
     private String subcategoriaId;
     private Integer cantidad;
 
-    public Paquete() {
-    }
+    public Paquete() {}
 
     public Paquete(String donacionId, String subcategoriaId, Integer cantidad) {
         this.donacionId = donacionId;
@@ -21,43 +20,16 @@ public class Paquete {
         this.cantidad = cantidad;
     }
 
-    public Integer getId() {
-        return id;
-    }
+    public Integer getId() { return id; }
+    public void setId(Integer id) { this.id = id; }
 
-    public void setId(Integer id) {
-        this.id = id;
-    }
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
 
-    public String getExternalId() {
-        return externalId;
-    }
+    // Métodos corregidos para que coincidan con la Fachada
+    public String getDonacionID() { return donacionId; }
+    public String getProductoID() { return subcategoriaId; }
 
-    public void setExternalId(String externalId) {
-        this.externalId = externalId;
-    }
-
-    public String getDonacionId() {
-        return donacionId;
-    }
-
-    public void setDonacionId(String donacionId) {
-        this.donacionId = donacionId;
-    }
-
-    public String getSubcategoriaId() {
-        return subcategoriaId;
-    }
-
-    public void setSubcategoriaId(String subcategoriaId) {
-        this.subcategoriaId = subcategoriaId;
-    }
-
-    public Integer getCantidad() {
-        return cantidad;
-    }
-
-    public void setCantidad(Integer cantidad) {
-        this.cantidad = cantidad;
-    }
+    public Integer getCantidad() { return cantidad; }
+    public void setCantidad(Integer cantidad) { this.cantidad = cantidad; }
 }

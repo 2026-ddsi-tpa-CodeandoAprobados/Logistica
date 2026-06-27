@@ -38,17 +38,17 @@ public class LogisticaDataMapper {
     public PaqueteDTO map(Paquete paquete) {
         return new PaqueteDTO(
                 String.valueOf(paquete.getId()),
-                paquete.getDonacionId(),
-                paquete.getSubcategoriaId(),
+                paquete.getDonacionID(),
+                paquete.getProductoID(),
                 paquete.getCantidad()
         );
     }
 
     public AsignacionDTO map(Asignacion asignacion) {
         return new AsignacionDTO(
-                asignacion.getId(),
-                asignacion.getPaqueteID(),
-                asignacion.getNecesidadID(),
+                String.valueOf(asignacion.getId()),
+                String.valueOf(asignacion.getPaqueteID()),
+                String.valueOf(asignacion.getNecesidadID()),
                 asignacion.getFecha(),
                 asignacion.getEstado()
         );
