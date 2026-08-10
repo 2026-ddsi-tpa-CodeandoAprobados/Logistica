@@ -22,7 +22,6 @@ public class LogisticaController {
 
     // --- RECORDS ---
     public record DepositoRequest(String nombre, String direccion, Integer capacidadMaxima) {}
-    public record DonacionRequest(String donacionID, String productoID, Integer cantidad) {}
     public record PaqueteRequest(String paqueteId) {}
 
     // ---------------- DEPOSITOS ----------------
@@ -72,28 +71,9 @@ public class LogisticaController {
     }
 
     // ---------------- DONACION ----------------
-    @PostMapping("/depositos/{id}/donacion")
-    public ResponseEntity<DepositoDTO> gestionarDonacion(@PathVariable String id, @RequestBody DonacionRequest request) {
+    @PostMapping("/donaciones")
+    public ResponseEntity<DepositoDTO> gestionarDonacion(@RequestBody DonacionDTO donacionDTO) {
         try {
-            // 1. Crea el detalle
-            DetalleProductoDTO detalle = new DetalleProductoDTO(
-                    null,
-                    request.productoID(),
-                    request.cantidad()
-            );
-
-            // 2. Instancia el DonacionDTO
-            DonacionDTO donacionDTO = new DonacionDTO(
-                    request.donacionID(),       // id
-                    null,                       // donadorID (no lo tengo en el request)
-                    id,                         // depositoID (viene del path)
-                    "Donacion desde Logistica", // descripcion
-                    List.of(detalle),           // detallesProductosDTO
-                    null,                       // estado (se suele setear en el servicio Donaciones)
-                    null                        // fechaRegistro (se suele setear en el servicio Donaciones)
-            );
-
-            // 3. Llamo a la fachada
             DepositoDTO respuesta = fachada.gestionarDonacion(donacionDTO);
             return new ResponseEntity<>(respuesta, HttpStatus.CREATED);
         } catch (NoSuchElementException e) {
@@ -103,7 +83,6 @@ public class LogisticaController {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
     }
-
     // ---------------- ENTREGAS ----------------
 
     @PostMapping("/entregas")

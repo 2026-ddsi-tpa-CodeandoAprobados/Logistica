@@ -108,9 +108,20 @@ public class Fachada implements FachadaLogistica {
   public void reportarEntrega(PaqueteDTO p) {
     Asignacion a = asignacionRepository.findByPaqueteID(p.id()).orElseThrow();
 
-    if(this.donacionesClient != null) {
+    if (this.entidadesClient != null) {
       try {
-        EstadoDonacionRequest request = new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
+        Map<String, Integer> requestBody = new HashMap<>();
+        requestBody.put("cantidad", p.cantidad());
+        this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
+      } catch (Exception ex) {
+        System.err.println("Error al satisfacer necesidad: " + ex.getMessage());
+      }
+    }
+
+    if (this.donacionesClient != null) {
+      try {
+        EstadoDonacionRequest request =
+                new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
         this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
       } catch (Exception e) {
         System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
@@ -119,7 +130,7 @@ public class Fachada implements FachadaLogistica {
 
     a.setEstado(EstadoAsginacionEnum.COMPLETADA);
     asignacionRepository.save(a);
-    if(entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
+    if (entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
   }
 
   @Override public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) {}
@@ -144,19 +155,14 @@ public class Fachada implements FachadaLogistica {
   }
 
   @Override
-  public AsignacionDTO ejecutarMatchmaking(String id, PaqueteDTO p, List<NecesidadMaterialDTO> n) {
-    NecesidadMaterialDTO e = matchmaker.calcularMejorOpcion(n);
-    Asignacion asignacion = asignacionRepository.save(new Asignacion(p.id(), e.id()));
+  public AsignacionDTO ejecutarMatchmaking(String id, PaqueteDTO p,
+                                           List<NecesidadMaterialDTO> n) {
 
-    if(this.entidadesClient != null) {
-      try {
-        Map<String, Integer> requestBody = new HashMap<>();
-        requestBody.put("cantidad", p.cantidad());
-        this.entidadesClient.postSatisfacerNecesidad(e.id(), requestBody);
-      } catch (Exception ex) {
-        System.err.println("Error al notificar satisfacción: " + ex.getMessage());
-      }
-    }
+    Deposito deposito = depositoRepository.findById(Integer.valueOf(id))
+            .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
+
+    NecesidadMaterialDTO e = matchmaker.calcularMejorOpcion(n, deposito.getAlgoritmo(), p.cantidad());
+    Asignacion asignacion = asignacionRepository.save(new Asignacion(p.id(), e.id()));
     return mapper.map(asignacion);
   }
 
