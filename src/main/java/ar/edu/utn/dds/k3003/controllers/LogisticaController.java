@@ -37,7 +37,7 @@ public class LogisticaController {
         try {
             DepositoDTO depositoDTO = new DepositoDTO(
                     null,
-                    TipoAlgoritmoEnum.PRIORIDAD,
+                    null,
                     request.nombre(),
                     request.direccion(),
                     request.capacidadMaxima(),
