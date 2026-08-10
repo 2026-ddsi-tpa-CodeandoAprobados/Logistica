@@ -70,6 +70,11 @@ public class LogisticaController {
         }
     }
 
+    @GetMapping("/paquetes")
+    public ResponseEntity<List<PaqueteDTO>> obtenerTodosLosPaquetes() {
+        return new ResponseEntity<>(fachada.buscarTodosLosPaquetes(), HttpStatus.OK);
+    }
+
     // ---------------- DONACION ----------------
     @PostMapping("/donaciones")
     public ResponseEntity<DepositoDTO> gestionarDonacion(@RequestBody DonacionDTO donacionDTO) {

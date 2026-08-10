@@ -153,6 +153,11 @@ public class Fachada implements FachadaLogistica {
             paquete.getCantidad()
     );
   }
+  public List<PaqueteDTO> buscarTodosLosPaquetes() {
+    return paqueteRepository.findAll().stream()
+            .map(p -> new PaqueteDTO(String.valueOf(p.getId()), p.getDonacionID(), p.getProductoID(), p.getCantidad()))
+            .toList();
+  }
 
   @Override
   public AsignacionDTO ejecutarMatchmaking(String id, PaqueteDTO p,
