@@ -70,6 +70,18 @@ public class LogisticaController {
         }
     }
 
+    public record AlgoritmoRequest(TipoAlgoritmoEnum algoritmo) {}
+
+    @PatchMapping("/depositos/{id}/algoritmo")
+    public ResponseEntity<Void> setAlgoritmo(@PathVariable String id, @RequestBody AlgoritmoRequest request) {
+        try {
+            fachada.setAlgoritmoMM(id, request.algoritmo());
+            return new ResponseEntity<>(HttpStatus.OK);
+        } catch (NoSuchElementException e) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
     @GetMapping("/paquetes")
     public ResponseEntity<List<PaqueteDTO>> obtenerTodosLosPaquetes() {
         return new ResponseEntity<>(fachada.buscarTodosLosPaquetes(), HttpStatus.OK);
