@@ -23,6 +23,7 @@ public class LogisticaController {
     // --- RECORDS ---
     public record DepositoRequest(String nombre, String direccion, Integer capacidadMaxima) {}
     public record PaqueteRequest(String paqueteId) {}
+    public record AlgoritmoRequest(TipoAlgoritmoEnum algoritmo) {}
 
     // ---------------- DEPOSITOS ----------------
 
@@ -65,6 +66,16 @@ public class LogisticaController {
         try {
             fachada.eliminarDeposito(id);
             return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        } catch (NoSuchElementException e) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @PatchMapping("/depositos/{id}/algoritmo")
+    public ResponseEntity<Void> setAlgoritmo(@PathVariable String id, @RequestBody AlgoritmoRequest request) {
+        try {
+            fachada.setAlgoritmoMM(id, request.algoritmo());
+            return new ResponseEntity<>(HttpStatus.OK);
         } catch (NoSuchElementException e) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
