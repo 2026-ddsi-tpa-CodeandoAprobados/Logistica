@@ -127,4 +127,8 @@ public class LogisticaController {
     public ResponseEntity<Object> debugNecesidades(@PathVariable String productoID) {
         return ResponseEntity.ok(fachada.debugNecesidades(productoID));
     }
+    @GetMapping("/asignaciones")
+    public ResponseEntity<List<AsignacionDTO>> obtenerTodasLasAsignaciones() {
+        return new ResponseEntity<>(fachada.buscarTodasLasAsignaciones(), HttpStatus.OK);
+    }
 }

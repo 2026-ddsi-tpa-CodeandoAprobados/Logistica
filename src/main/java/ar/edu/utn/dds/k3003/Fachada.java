@@ -100,6 +100,9 @@ public class Fachada implements FachadaLogistica {
     return mapper.map(deposito);
   }
 
+  public List<AsignacionDTO> buscarTodasLasAsignaciones() {
+    return asignacionRepository.findAll().stream().map(mapper::map).toList();
+  }
 
   @Override
   public void reportarEntrega(PaqueteDTO p) {
