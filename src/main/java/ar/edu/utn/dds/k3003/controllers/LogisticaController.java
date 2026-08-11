@@ -70,18 +70,6 @@ public class LogisticaController {
         }
     }
 
-    public record AlgoritmoRequest(TipoAlgoritmoEnum algoritmo) {}
-
-    @PatchMapping("/depositos/{id}/algoritmo")
-    public ResponseEntity<Void> setAlgoritmo(@PathVariable String id, @RequestBody AlgoritmoRequest request) {
-        try {
-            fachada.setAlgoritmoMM(id, request.algoritmo());
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (NoSuchElementException e) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-    }
-
     @GetMapping("/paquetes")
     public ResponseEntity<List<PaqueteDTO>> obtenerTodosLosPaquetes() {
         return new ResponseEntity<>(fachada.buscarTodosLosPaquetes(), HttpStatus.OK);
@@ -133,5 +121,10 @@ public class LogisticaController {
         } catch (Exception e) {
             return new ResponseEntity<>("Error al limpiar la base de datos: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    @GetMapping("/debug/necesidades/{productoID}")
+    public ResponseEntity<Object> debugNecesidades(@PathVariable String productoID) {
+        return ResponseEntity.ok(fachada.debugNecesidades(productoID));
     }
 }

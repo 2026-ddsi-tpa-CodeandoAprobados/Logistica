@@ -180,4 +180,18 @@ public class Fachada implements FachadaLogistica {
     paqueteRepository.deleteAll();
     depositoRepository.deleteAll();
   }
+
+  public Object debugNecesidades(String productoID) {
+    if (entidadesClient == null) {
+      return "PROBLEMA: entidadesClient es NULL — el cliente Feign nunca se inyectó";
+    }
+    try {
+      List<NecesidadMaterialDTO> resultado = entidadesClient.getAllNecesidadesDeUnProducto(productoID);
+      return resultado;
+    } catch (Exception e) {
+      return "ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage();
+    }
+  }
+
 }
+
