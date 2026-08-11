@@ -77,7 +77,7 @@ public class Fachada implements FachadaLogistica {
         throw new RuntimeException("Cantidad inválida");
       }
 
-      Paquete paquete = new Paquete(donacionDTO.id(), detalle.productoId(), detalle.cantidadProducto());
+      Paquete paquete = new Paquete(donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
       Paquete paqueteGuardado = paqueteRepository.save(paquete);
 
       PaqueteDTO paqueteDTO = new PaqueteDTO(
