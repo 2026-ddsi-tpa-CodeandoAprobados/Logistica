@@ -109,23 +109,15 @@ public class Fachada implements FachadaLogistica {
     Asignacion a = asignacionRepository.findByPaqueteID(p.id()).orElseThrow();
 
     if (this.entidadesClient != null) {
-      try {
-        Map<String, Integer> requestBody = new HashMap<>();
-        requestBody.put("cantidad", p.cantidad());
-        this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
-      } catch (Exception ex) {
-        System.err.println("Error al satisfacer necesidad: " + ex.getMessage());
-      }
+      Map<String, Integer> requestBody = new HashMap<>();
+      requestBody.put("cantidad", p.cantidad());
+      this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
     }
 
     if (this.donacionesClient != null) {
-      try {
-        EstadoDonacionRequest request =
-                new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
-        this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
-      } catch (Exception e) {
-        System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
-      }
+      EstadoDonacionRequest request =
+              new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
+      this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
     }
 
     a.setEstado(EstadoAsginacionEnum.COMPLETADA);
