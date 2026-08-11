@@ -91,18 +91,15 @@ public class Fachada implements FachadaLogistica {
 
     if (this.entidadesClient != null) {
       for (PaqueteDTO paqueteDTO : paquetesGuardadosDTO) {
-        try {
-          List<NecesidadMaterialDTO> necesidades = this.entidadesClient.getAllNecesidadesDeUnProducto(paqueteDTO.producto());
-          if (necesidades != null && !necesidades.isEmpty()) {
-            this.ejecutarMatchmaking(deposito.getId().toString(), paqueteDTO, necesidades);
-          }
-        } catch (Exception e) {
-          System.err.println("Error en MM: " + e.getMessage());
+        List<NecesidadMaterialDTO> necesidades = this.entidadesClient.getAllNecesidadesDeUnProducto(paqueteDTO.producto());
+        if (necesidades != null && !necesidades.isEmpty()) {
+          this.ejecutarMatchmaking(deposito.getId().toString(), paqueteDTO, necesidades);
         }
       }
     }
     return mapper.map(deposito);
   }
+
 
   @Override
   public void reportarEntrega(PaqueteDTO p) {
