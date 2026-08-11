@@ -64,6 +64,12 @@
       <version>4.3.1</version> </dependency>
 
     <dependency>
+      <groupId>io.github.openfeign</groupId>
+      <artifactId>feign-okhttp</artifactId>
+      <version>13.6</version>
+    </dependency>
+
+    <dependency>
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-datadog</artifactId>
       <scope>runtime</scope>
