@@ -48,6 +48,17 @@ public class Matchmaker {
         };
     }
 
+    /**
+     * Cantidad de la donación que se debe asignar a la necesidad elegida:
+     * el mínimo entre lo donado y lo que le falta para llegar al objetivo.
+     * Para EXTRAORDINARIA con faltante > donado, esto devuelve todo lo donado.
+     * El sobrante (donado - resultado) es lo que va al stock.
+     */
+    public int cantidadAAsignar(NecesidadMaterialDTO n, Integer cantidadDonada) {
+        int faltante = (int) Math.max(0, n.cantidadObjetivo() - cantidadAsignadaA(n.id()));
+        return Math.min(cantidadDonada, faltante);
+    }
+
     private boolean esElegible(NecesidadMaterialDTO n, Integer cantidadDonada) {
         double faltante = n.cantidadObjetivo() - cantidadAsignadaA(n.id());
         if (faltante <= 0) return false;
