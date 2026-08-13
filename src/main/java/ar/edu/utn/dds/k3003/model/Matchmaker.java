@@ -59,6 +59,46 @@ public class Matchmaker {
         return Math.min(cantidadDonada, faltante);
     }
 
+    /**
+     * Entrega 4 - Parte B. Selección de necesidad SIN acceso a BD, para el Worker stateless.
+     * Usa el {@code cantidadObjetivo} que reporta Entidades como faltante (no consulta las
+     * asignaciones locales). Devuelve null si ninguna necesidad es elegible.
+     */
+    public NecesidadMaterialDTO elegirNecesidadStateless(
+            List<NecesidadMaterialDTO> necesidades,
+            TipoAlgoritmoEnum algoritmo,
+            int cantidadDonada) {
+
+        List<NecesidadMaterialDTO> elegibles = necesidades.stream()
+                .filter(n -> {
+                    int faltante = n.cantidadObjetivo() == null ? 0 : n.cantidadObjetivo();
+                    if (faltante <= 0) return false;
+                    if (n.tipo() == TipoNecesidadMaterialEnum.RECURRENTE) {
+                        return cantidadDonada >= faltante; // recurrente no admite parcial
+                    }
+                    return true;
+                })
+                .toList();
+
+        if (elegibles.isEmpty()) return null;
+
+        TipoAlgoritmoEnum alg = (algoritmo != null) ? algoritmo : TipoAlgoritmoEnum.SUB_ATENDIDOS;
+        return switch (alg) {
+            case SUB_ATENDIDOS, PRIORIDAD -> elegibles.stream()
+                    .max(Comparator.comparingInt(NecesidadMaterialDTO::cantidadObjetivo))
+                    .orElse(null);
+            case PRIORIDAD_POR_SCORE -> elegibles.stream()
+                    .max(Comparator.comparingInt(NecesidadMaterialDTO::nivelDeUrgencia))
+                    .orElse(null);
+        };
+    }
+
+    /** Cantidad a asignar sin BD: min(donado, cantidadObjetivo reportado). */
+    public int cantidadAAsignarStateless(NecesidadMaterialDTO n, int cantidadDonada) {
+        int faltante = n.cantidadObjetivo() == null ? 0 : n.cantidadObjetivo();
+        return Math.max(0, Math.min(cantidadDonada, faltante));
+    }
+
     private boolean esElegible(NecesidadMaterialDTO n, Integer cantidadDonada) {
         double faltante = n.cantidadObjetivo() - cantidadAsignadaA(n.id());
         if (faltante <= 0) return false;
