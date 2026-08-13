@@ -115,9 +115,19 @@ public class LogisticaController {
     // ---------------- ASIGNACIONES ----------------
 
     @GetMapping("/asignaciones/{id}")
-    public ResponseEntity<AsignacionDTO> buscarAsignacion(@PathVariable String id) {
+    public ResponseEntity<AsignacionDTO> buscarAsignacionPorId(@PathVariable String id) {
         try {
-            AsignacionDTO dto = fachada.buscarAsignacionPorPaqueteID(id);
+            AsignacionDTO dto = fachada.buscarAsignacionPorID(id);
+            return new ResponseEntity<>(dto, HttpStatus.OK);
+        } catch (NoSuchElementException e) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @GetMapping("/asignaciones/paquete/{paqueteID}")
+    public ResponseEntity<AsignacionDTO> buscarAsignacionPorPaquete(@PathVariable String paqueteID) {
+        try {
+            AsignacionDTO dto = fachada.buscarAsignacionPorPaqueteID(paqueteID);
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (NoSuchElementException e) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
