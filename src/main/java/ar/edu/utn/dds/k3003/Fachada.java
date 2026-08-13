@@ -15,6 +15,8 @@ import ar.edu.utn.dds.k3003.clients.DonacionesClient;
 import ar.edu.utn.dds.k3003.clients.EntidadesClient;
 import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
+import ar.edu.utn.dds.k3003.messaging.DonacionMessage;
+import ar.edu.utn.dds.k3003.messaging.DonacionPublisher;
 import feign.FeignException;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,7 @@ public class Fachada implements FachadaLogistica {
   @Autowired(required = false) private MeterRegistry meterRegistry;
   @Autowired(required = false) private EntidadesClient entidadesClient;
   @Autowired(required = false) private DonacionesClient donacionesClient;
+  @Autowired(required = false) private DonacionPublisher donacionPublisher;
 
   private Counter entregasCompletadasCounter;
   private Counter asignacionesMatchmakingCounter;
@@ -94,10 +97,44 @@ public class Fachada implements FachadaLogistica {
     }
     verificarEspacio(deposito, totalUnidades);
 
+    // Entrega 4 - Parte B: si la mensajería está activa, se encola y un Worker asigna async.
+    if (donacionPublisher != null) {
+      List<DonacionMessage.Item> items = donacionDTO.detallesProductosDTO().stream()
+              .map(d -> new DonacionMessage.Item(d.productoID(), d.cantidadProducto()))
+              .toList();
+      donacionPublisher.publicar(new DonacionMessage(
+              donacionDTO.id(), donacionDTO.depositoID(), deposito.getAlgoritmo(), items));
+      return mapper.map(deposito);
+    }
+
+    // Modo síncrono (Parte A): se procesa en el momento.
     for (var detalle : donacionDTO.detallesProductosDTO()) {
       procesarDetalle(deposito, donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
     }
 
+    return mapper.map(deposito);
+  }
+
+  /**
+   * Entrega 4 - Parte B. Alta de asignación solicitada por el Worker (que no tiene BD).
+   * Crea el paquete de la porción asignada y la asignación por matchmaking.
+   */
+  public AsignacionDTO altaAsignacionDesdeWorker(String donacionID, String productoID,
+                                                 int cantidad, String necesidadID) {
+    Paquete paquete = paqueteRepository.save(new Paquete(donacionID, productoID, cantidad));
+    Asignacion asignacion = asignacionRepository.save(
+            new Asignacion(String.valueOf(paquete.getId()), necesidadID,
+                    OrigenAsignacionEnum.MATCHMAKING));
+    if (asignacionesMatchmakingCounter != null) asignacionesMatchmakingCounter.increment();
+    return mapper.map(asignacion);
+  }
+
+  /** Entrega 4 - Parte B. Guarda en stock el sobrante que le indica el Worker. */
+  public DepositoDTO guardarSobranteEnStock(String depositoID, String donacionID,
+                                            String productoID, int cantidad) {
+    Deposito deposito = depositoRepository.findById(Integer.valueOf(depositoID))
+            .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
+    guardarEnStock(deposito, donacionID, productoID, cantidad);
     return mapper.map(deposito);
   }
 

@@ -4,6 +4,8 @@ import ar.edu.utn.dds.k3003.Fachada;
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DetalleProductoDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DonacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
+import ar.edu.utn.dds.k3003.messaging.AltaAsignacionRequest;
+import ar.edu.utn.dds.k3003.messaging.GuardarStockRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -99,6 +101,37 @@ public class LogisticaController {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
     }
+    // ---------------- WORKER (Entrega 4 - Parte B) ----------------
+
+    // El Worker (stateless) da de alta la asignación calculada por matchmaking.
+    @PostMapping("/asignaciones")
+    public ResponseEntity<AsignacionDTO> altaAsignacion(@RequestBody AltaAsignacionRequest request) {
+        try {
+            AsignacionDTO dto = fachada.altaAsignacionDesdeWorker(
+                    request.donacionID(), request.productoID(), request.cantidad(), request.necesidadID());
+            return new ResponseEntity<>(dto, HttpStatus.CREATED);
+        } catch (NoSuchElementException e) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // El Worker guarda el sobrante de la donación en el stock del depósito.
+    @PostMapping("/depositos/{id}/stock")
+    public ResponseEntity<DepositoDTO> guardarSobranteEnStock(@PathVariable String id,
+                                                              @RequestBody GuardarStockRequest request) {
+        try {
+            DepositoDTO dto = fachada.guardarSobranteEnStock(
+                    id, request.donacionID(), request.productoID(), request.cantidad());
+            return new ResponseEntity<>(dto, HttpStatus.OK);
+        } catch (NoSuchElementException e) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+    }
+
     // ---------------- ENTREGAS ----------------
 
     @PostMapping("/entregas")
