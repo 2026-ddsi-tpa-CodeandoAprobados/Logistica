@@ -50,7 +50,8 @@ public class LogisticaDataMapper {
                 String.valueOf(asignacion.getPaqueteID()),
                 String.valueOf(asignacion.getNecesidadID()),
                 asignacion.getFecha(),
-                asignacion.getEstado()
+                asignacion.getEstado(),
+                asignacion.getOrigen()
         );
     }
 }
