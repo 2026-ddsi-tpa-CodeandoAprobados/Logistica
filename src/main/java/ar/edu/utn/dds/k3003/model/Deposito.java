@@ -13,7 +13,7 @@ public class Deposito {
     private String nombre;
     private String direccion;
     private Integer capacidadMaxima;
-    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
     @JoinColumn(name = "deposito_id")
     private List<Paquete> stock = new ArrayList<>();
     private TipoAlgoritmoEnum algoritmo;
