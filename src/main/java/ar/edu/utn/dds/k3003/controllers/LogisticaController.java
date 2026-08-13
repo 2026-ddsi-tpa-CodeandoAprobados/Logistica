@@ -145,6 +145,31 @@ public class LogisticaController {
         }
     }
 
+    // ---------------- STOCK (Entrega 4 - Donadores) ----------------
+
+    // Donadores consulta cuánto stock hay de un producto (agregado de todos los depósitos).
+    @GetMapping("/stock/{productoID}")
+    public ResponseEntity<StockDisponibleDTO> stockDisponible(@PathVariable String productoID) {
+        int disponible = fachada.stockDisponible(productoID);
+        return ResponseEntity.ok(new StockDisponibleDTO(productoID, disponible));
+    }
+
+    // Donadores pide asignar stock a una necesidad (origen SOLICITUD_DONADORES).
+    @PostMapping("/stock/{productoID}/asignaciones")
+    public ResponseEntity<AsignacionDTO> asignarDesdeStock(@PathVariable String productoID,
+                                                           @RequestBody AsignacionDesdeStockRequest request) {
+        try {
+            AsignacionDTO dto = fachada.asignarDesdeStock(
+                    productoID, request.cantidad(), request.necesidadID());
+            if (dto == null) {
+                return ResponseEntity.noContent().build(); // no había stock del producto
+            }
+            return new ResponseEntity<>(dto, HttpStatus.CREATED);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+    }
+
     // ---------------- ASIGNACIONES ----------------
 
     @GetMapping("/asignaciones/{id}")

@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 
 import java.util.List;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.HashMap;
 import java.util.Map;
@@ -45,6 +46,7 @@ public class Fachada implements FachadaLogistica {
 
   private Counter entregasCompletadasCounter;
   private Counter asignacionesMatchmakingCounter;
+  private Counter asignacionesSolicitudCounter;
   private Counter paquetesEnStockCounter;
 
   public Fachada() {}
@@ -56,6 +58,9 @@ public class Fachada implements FachadaLogistica {
               .tag("modulo", "logistica")
               .register(meterRegistry);
       this.asignacionesMatchmakingCounter = Counter.builder("logistica.asignaciones_matchmaking")
+              .tag("modulo", "logistica")
+              .register(meterRegistry);
+      this.asignacionesSolicitudCounter = Counter.builder("logistica.asignaciones_solicitud_donadores")
               .tag("modulo", "logistica")
               .register(meterRegistry);
       this.paquetesEnStockCounter = Counter.builder("logistica.paquetes_en_stock")
@@ -136,6 +141,73 @@ public class Fachada implements FachadaLogistica {
             .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
     guardarEnStock(deposito, donacionID, productoID, cantidad);
     return mapper.map(deposito);
+  }
+
+  /**
+   * Entrega 4 - Donadores. Stock disponible de un producto sumando el stock de TODOS
+   * los depósitos (Donadores consulta por producto, sin conocer depósitos).
+   */
+  public int stockDisponible(String productoID) {
+    return depositoRepository.findAll().stream()
+            .flatMap(d -> d.getStock().stream())
+            .filter(p -> productoID.equals(p.getProductoID()))
+            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
+            .sum();
+  }
+
+  /**
+   * Entrega 4 - Donadores. Asigna stock a una necesidad por solicitud de "Donadores y
+   * Entidades": asigna min(disponible, solicitada), consume ese stock y crea la asignación
+   * con origen SOLICITUD_DONADORES (para diferenciarla del matchmaking en Incentivos).
+   * Devuelve null si no hay stock del producto.
+   */
+  public AsignacionDTO asignarDesdeStock(String productoID, int cantidadSolicitada, String necesidadID) {
+    if (cantidadSolicitada <= 0) {
+      throw new RuntimeException("La cantidad solicitada debe ser mayor a cero");
+    }
+
+    List<Deposito> depositos = depositoRepository.findAll();
+    int disponible = depositos.stream()
+            .flatMap(d -> d.getStock().stream())
+            .filter(p -> productoID.equals(p.getProductoID()))
+            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
+            .sum();
+    if (disponible <= 0) {
+      return null; // no hay stock del producto
+    }
+
+    int aAsignar = Math.min(disponible, cantidadSolicitada);
+    int restante = aAsignar;
+    String donacionOrigen = null;
+
+    // Consume aAsignar unidades del stock (paquete completo o parcial).
+    for (Deposito d : depositos) {
+      boolean modificado = false;
+      Iterator<Paquete> it = d.getStock().iterator();
+      while (it.hasNext() && restante > 0) {
+        Paquete p = it.next();
+        if (!productoID.equals(p.getProductoID())) continue;
+        if (donacionOrigen == null) donacionOrigen = p.getDonacionID();
+        int c = p.getCantidad() == null ? 0 : p.getCantidad();
+        if (c <= restante) {
+          restante -= c;
+          it.remove(); // consume el paquete completo (orphanRemoval lo borra)
+        } else {
+          p.setCantidad(c - restante); // consumo parcial
+          restante = 0;
+        }
+        modificado = true;
+      }
+      if (modificado) depositoRepository.save(d);
+      if (restante == 0) break;
+    }
+
+    Paquete asignado = paqueteRepository.save(new Paquete(donacionOrigen, productoID, aAsignar));
+    Asignacion asignacion = asignacionRepository.save(
+            new Asignacion(String.valueOf(asignado.getId()), necesidadID,
+                    OrigenAsignacionEnum.SOLICITUD_DONADORES));
+    if (asignacionesSolicitudCounter != null) asignacionesSolicitudCounter.increment();
+    return mapper.map(asignacion);
   }
 
   /** Unidades actualmente ocupadas en el stock del depósito (1 unidad por producto). */
