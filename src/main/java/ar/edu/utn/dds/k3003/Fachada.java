@@ -15,13 +15,13 @@ import ar.edu.utn.dds.k3003.clients.DonacionesClient;
 import ar.edu.utn.dds.k3003.clients.EntidadesClient;
 import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
+import feign.FeignException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.HashMap;
@@ -41,6 +41,8 @@ public class Fachada implements FachadaLogistica {
   @Autowired(required = false) private DonacionesClient donacionesClient;
 
   private Counter entregasCompletadasCounter;
+  private Counter asignacionesMatchmakingCounter;
+  private Counter paquetesEnStockCounter;
 
   public Fachada() {}
 
@@ -48,6 +50,12 @@ public class Fachada implements FachadaLogistica {
   public void initMetrics() {
     if (meterRegistry != null) {
       this.entregasCompletadasCounter = Counter.builder("logistica.entregas_completadas")
+              .tag("modulo", "logistica")
+              .register(meterRegistry);
+      this.asignacionesMatchmakingCounter = Counter.builder("logistica.asignaciones_matchmaking")
+              .tag("modulo", "logistica")
+              .register(meterRegistry);
+      this.paquetesEnStockCounter = Counter.builder("logistica.paquetes_en_stock")
               .tag("modulo", "logistica")
               .register(meterRegistry);
     }
@@ -62,42 +70,116 @@ public class Fachada implements FachadaLogistica {
     if (this.donacionesClient != null) {
       try {
         this.donacionesClient.buscarDonacionPorId(donacionDTO.id());
+      } catch (FeignException.NotFound e) {
+        // 404 real: la donación no existe en Donaciones.
+        throw new NoSuchElementException(
+                "La donación " + donacionDTO.id() + " no existe en el módulo de Donaciones");
       } catch (Exception e) {
-        throw new RuntimeException("La donación no existe en el módulo de Donaciones");
+        // Timeout / 5xx / caída de red: NO es "no existe", es un fallo de integración.
+        throw new RuntimeException(
+                "No se pudo validar la donación con el módulo de Donaciones: " + e.getMessage(), e);
       }
     }
 
     Deposito deposito = depositoRepository.findById(Integer.valueOf(donacionDTO.depositoID()))
             .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
 
-    List<PaqueteDTO> paquetesGuardadosDTO = new ArrayList<>();
-
+    // Entrega 4 - Parte A/B: verificar espacio ANTES de procesar, contra el total de la donación.
+    int totalUnidades = 0;
     for (var detalle : donacionDTO.detallesProductosDTO()) {
       if (detalle.cantidadProducto() == null || detalle.cantidadProducto() <= 0) {
         throw new RuntimeException("Cantidad inválida");
       }
+      totalUnidades += detalle.cantidadProducto();
+    }
+    verificarEspacio(deposito, totalUnidades);
 
-      Paquete paquete = new Paquete(donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
-      Paquete paqueteGuardado = paqueteRepository.save(paquete);
-
-      PaqueteDTO paqueteDTO = new PaqueteDTO(
-              String.valueOf(paqueteGuardado.getId()),
-              paqueteGuardado.getDonacionID(),
-              paqueteGuardado.getProductoID(),
-              paqueteGuardado.getCantidad()
-      );
-      paquetesGuardadosDTO.add(paqueteDTO);
+    for (var detalle : donacionDTO.detallesProductosDTO()) {
+      procesarDetalle(deposito, donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
     }
 
-    if (this.entidadesClient != null) {
-      for (PaqueteDTO paqueteDTO : paquetesGuardadosDTO) {
-        List<NecesidadMaterialDTO> necesidades = this.entidadesClient.getAllNecesidadesDeUnProducto(paqueteDTO.producto());
-        if (necesidades != null && !necesidades.isEmpty()) {
-          this.ejecutarMatchmaking(deposito.getId().toString(), paqueteDTO, necesidades);
-        }
-      }
-    }
     return mapper.map(deposito);
+  }
+
+  /** Unidades actualmente ocupadas en el stock del depósito (1 unidad por producto). */
+  private int ocupadoDe(Deposito deposito) {
+    return deposito.getStock().stream()
+            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
+            .sum();
+  }
+
+  /**
+   * Verifica que entren {@code unidadesRequeridas} en el depósito (regla de recepción 1A/1B).
+   * Reutilizable por Parte B antes de encolar la donación.
+   */
+  private void verificarEspacio(Deposito deposito, int unidadesRequeridas) {
+    Integer capacidad = deposito.getCapacidadMaxima();
+    if (capacidad == null) {
+      return; // sin capacidad definida -> sin límite
+    }
+    int ocupado = ocupadoDe(deposito);
+    if (ocupado + unidadesRequeridas > capacidad) {
+      throw new RuntimeException("El depósito " + deposito.getId()
+              + " no tiene espacio para la donación (capacidad " + capacidad
+              + ", ocupado " + ocupado + ", requiere " + unidadesRequeridas + ")");
+    }
+  }
+
+  /**
+   * Entrega 4 - Parte A. Para el producto donado:
+   *  - Si no hay necesidades insatisfechas -> las unidades van al stock.
+   *  - Si hay necesidades -> el matchmaking elige la mejor; se asigna min(donado, faltante)
+   *    (esa porción NO pasa por el stock) y el sobrante se guarda en el stock.
+   *  Puede generar 2 paquetes con el mismo donacionID (uno asignado y otro en stock).
+   */
+  private void procesarDetalle(Deposito deposito, String donacionID, String productoID, int cantidad) {
+    List<NecesidadMaterialDTO> necesidades = (entidadesClient != null)
+            ? entidadesClient.getAllNecesidadesDeUnProducto(productoID)
+            : null;
+
+    if (necesidades == null || necesidades.isEmpty()) {
+      guardarEnStock(deposito, donacionID, productoID, cantidad);
+      return;
+    }
+
+    NecesidadMaterialDTO necesidad;
+    try {
+      necesidad = matchmaker.calcularMejorOpcion(necesidades, deposito.getAlgoritmo(), cantidad);
+    } catch (RuntimeException e) {
+      // No hay necesidad elegible (p.ej. sólo recurrentes que no se pueden cubrir por completo) -> stock
+      guardarEnStock(deposito, donacionID, productoID, cantidad);
+      return;
+    }
+
+    int aAsignar = matchmaker.cantidadAAsignar(necesidad, cantidad);
+    if (aAsignar <= 0) {
+      guardarEnStock(deposito, donacionID, productoID, cantidad);
+      return;
+    }
+
+    // Porción asignada a la necesidad: paquete separado, no ocupa stock.
+    Paquete paqueteAsignado = paqueteRepository.save(new Paquete(donacionID, productoID, aAsignar));
+    asignacionRepository.save(
+            new Asignacion(String.valueOf(paqueteAsignado.getId()), necesidad.id(),
+                    OrigenAsignacionEnum.MATCHMAKING));
+    if (asignacionesMatchmakingCounter != null) asignacionesMatchmakingCounter.increment();
+
+    int sobrante = cantidad - aAsignar;
+    if (sobrante > 0) {
+      guardarEnStock(deposito, donacionID, productoID, sobrante);
+    }
+  }
+
+  /**
+   * Guarda unidades en el stock del depósito respetando la capacidad máxima
+   * (1 unidad por producto). La cascada de Deposito -> stock persiste el Paquete
+   * y le setea el deposito_id.
+   */
+  private void guardarEnStock(Deposito deposito, String donacionID, String productoID, int cantidad) {
+    verificarEspacio(deposito, cantidad);
+    deposito.getStock().add(new Paquete(donacionID, productoID, cantidad));
+    depositoRepository.save(deposito);
+    if (paquetesEnStockCounter != null) paquetesEnStockCounter.increment();
   }
 
   public List<AsignacionDTO> buscarTodasLasAsignaciones() {
@@ -172,6 +254,7 @@ public class Fachada implements FachadaLogistica {
   }
 
   @Override public AsignacionDTO buscarAsignacionPorPaqueteID(String id) { return mapper.map(asignacionRepository.findByPaqueteID(id).orElseThrow()); }
+  public AsignacionDTO buscarAsignacionPorID(String id) { return mapper.map(asignacionRepository.findById(id).orElseThrow()); }
   public List<DepositoDTO> buscarTodosLosDepositos() { return depositoRepository.findAll().stream().map(mapper::map).toList(); }
   public DepositoDTO eliminarDeposito(String id) {
     Deposito d = depositoRepository.findById(Integer.valueOf(id)).orElseThrow();
