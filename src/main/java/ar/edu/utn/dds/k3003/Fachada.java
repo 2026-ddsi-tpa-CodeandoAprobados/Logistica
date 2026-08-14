@@ -112,7 +112,7 @@ public class Fachada implements FachadaLogistica {
       return mapper.map(deposito);
     }
 
-    // Modo síncrono (Parte A): se procesa en el momento.
+    //(Parte A): se procesa en el momento.
     for (var detalle : donacionDTO.detallesProductosDTO()) {
       procesarDetalle(deposito, donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
     }
