@@ -14,7 +14,7 @@ Los marcados **(nuevo)** se incorporaron en la Entrega 4.
 | `POST` | `/asignaciones` **(nuevo)** | Alta de asignación por matchmaking que hace el **Worker**. Body: `{donacionID, productoID, cantidad, necesidadID}`. |
 | `POST` | `/depositos/{id}/stock` **(nuevo)** | El Worker guarda el sobrante en el stock. Body: `{donacionID, productoID, cantidad}`. |
 | `GET` | `/stock/{productoID}` **(nuevo)** | Stock disponible de un producto, agregado de todos los depósitos. → `{productoID, cantidadDisponible}`. |
-| `POST` | `/stock/{productoID}/asignaciones` **(nuevo)** | Asigna desde stock a pedido de Donadores. Body: `{cantidad, necesidadID}` → `201` asignación, o `204` si no hay stock. |
+| `POST` | `/stock/{productoID}/asignaciones` **(nuevo)** | Asigna desde stock a pedido de Donadores. Body: `{cantidad, necesidadID}` → `201` con la asignación, o `204` si no hay nada para asignar (sin stock, o `cantidad` nula/cero). Logística clampea a `min(disponible, cantidad)`: **decidir cuánto se asigna es responsabilidad de Logística**, no del solicitante. |
 | `POST` | `/entregas` | Reporta una entrega: satisface la necesidad, actualiza la donación y marca la asignación `COMPLETADA`. |
 | `GET` | `/asignaciones` | Lista todas las asignaciones (incluye el campo `origen`). |
 | `GET` | `/asignaciones/{id}` **(nuevo)** | Asignación por su id real. |
@@ -69,12 +69,14 @@ sequenceDiagram
     Ent->>Log: GET /stock/{producto}
     Log->>DB: suma stock del producto (todos los depósitos)
     Log-->>Ent: cantidadDisponible
-    alt hay stock
-        Ent->>Log: POST /stock/{producto}/asignaciones
-        Log->>DB: consume stock + asignación (SOLICITUD_DONADORES)
+    Ent->>Log: POST /stock/{producto}/asignaciones {cantidad, necesidadID}
+    Note over Log: Logística decide: aAsignar = min(disponible, cantidad)
+    alt hay algo para asignar
+        Log->>DB: consume stock (parte o parte del paquete) + asignación (SOLICITUD_DONADORES)
         Log-->>Ent: 201 asignación
-    else sin stock
+    else sin stock o cantidad 0
         Log-->>Ent: 204 No Content
+        Note over Ent: NO es error: el alta de la necesidad sigue adelante
     end
 ```
 

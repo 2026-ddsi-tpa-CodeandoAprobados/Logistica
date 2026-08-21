@@ -159,11 +159,16 @@ public class Fachada implements FachadaLogistica {
    * Entrega 4 - Donadores. Asigna stock a una necesidad por solicitud de "Donadores y
    * Entidades": asigna min(disponible, solicitada), consume ese stock y crea la asignación
    * con origen SOLICITUD_DONADORES (para diferenciarla del matchmaking en Incentivos).
-   * Devuelve null si no hay stock del producto.
-   */
-  public AsignacionDTO asignarDesdeStock(String productoID, int cantidadSolicitada, String necesidadID) {
-    if (cantidadSolicitada <= 0) {
-      throw new RuntimeException("La cantidad solicitada debe ser mayor a cero");
+   **/
+  public AsignacionDTO asignarDesdeStock(String productoID, Integer cantidadSolicitada, String necesidadID) {
+    if (necesidadID == null || necesidadID.isBlank()) {
+      throw new RuntimeException("La necesidad a asignar es obligatoria");
+    }
+    if (productoID == null || productoID.isBlank()) {
+      throw new RuntimeException("El producto a asignar es obligatorio");
+    }
+    if (cantidadSolicitada == null || cantidadSolicitada <= 0) {
+      return null; // no se pidió nada asignable -> 204, sin romper al solicitante
     }
 
     List<Deposito> depositos = depositoRepository.findAll();
