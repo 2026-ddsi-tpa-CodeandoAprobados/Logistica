@@ -9,3 +9,7 @@ target/
 *.log
 .DS_Store
 
+# Claude Code (config local, no debe subirse)
+.claude/
+MAPA.md
+
