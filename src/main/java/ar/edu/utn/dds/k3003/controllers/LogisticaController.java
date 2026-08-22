@@ -157,19 +157,21 @@ public class LogisticaController {
     // Donadores pide asignar stock a una necesidad (origen SOLICITUD_DONADORES).
     // 201 -> se creó la asignación (por la cantidad que Logística pudo cubrir).
     // 204 -> no había nada para asignar (sin stock, o cantidad nula/cero). NO es un error
+    // Se devuelve una LISTA porque el stock puede venir de varias donaciones y un paquete
+    // pertenece a una sola: en ese caso se crea una asignación por donación de origen.
     @PostMapping("/stock/{productoID}/asignaciones")
-    public ResponseEntity<AsignacionDTO> asignarDesdeStock(@PathVariable String productoID,
-                                                           @RequestBody(required = false) AsignacionDesdeStockRequest request) {
+    public ResponseEntity<List<AsignacionDTO>> asignarDesdeStock(@PathVariable String productoID,
+                                                                 @RequestBody(required = false) AsignacionDesdeStockRequest request) {
         if (request == null) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
         try {
-            AsignacionDTO dto = fachada.asignarDesdeStock(
+            List<AsignacionDTO> asignaciones = fachada.asignarDesdeStock(
                     productoID, request.cantidad(), request.necesidadID());
-            if (dto == null) {
+            if (asignaciones.isEmpty()) {
                 return ResponseEntity.noContent().build();
             }
-            return new ResponseEntity<>(dto, HttpStatus.CREATED);
+            return new ResponseEntity<>(asignaciones, HttpStatus.CREATED);
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }

@@ -17,15 +17,16 @@ import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
 import ar.edu.utn.dds.k3003.messaging.DonacionMessage;
 import ar.edu.utn.dds.k3003.messaging.DonacionPublisher;
-import feign.FeignException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.NoSuchElementException;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,20 +74,6 @@ public class Fachada implements FachadaLogistica {
   public DepositoDTO gestionarDonacion(DonacionDTO donacionDTO) {
     if (donacionDTO == null || donacionDTO.detallesProductosDTO() == null || donacionDTO.detallesProductosDTO().isEmpty()) {
       throw new RuntimeException("La donación está vacía o es nula");
-    }
-
-    if (this.donacionesClient != null) {
-      try {
-        this.donacionesClient.buscarDonacionPorId(donacionDTO.id());
-      } catch (FeignException.NotFound e) {
-        // 404 real: la donación no existe en Donaciones.
-        throw new NoSuchElementException(
-                "La donación " + donacionDTO.id() + " no existe en el módulo de Donaciones");
-      } catch (Exception e) {
-        // Timeout / 5xx / caída de red: NO es "no existe", es un fallo de integración.
-        throw new RuntimeException(
-                "No se pudo validar la donación con el módulo de Donaciones: " + e.getMessage(), e);
-      }
     }
 
     Deposito deposito = depositoRepository.findById(Integer.valueOf(donacionDTO.depositoID()))
@@ -159,8 +146,18 @@ public class Fachada implements FachadaLogistica {
    * Entrega 4 - Donadores. Asigna stock a una necesidad por solicitud de "Donadores y
    * Entidades": asigna min(disponible, solicitada), consume ese stock y crea la asignación
    * con origen SOLICITUD_DONADORES (para diferenciarla del matchmaking en Incentivos).
-   **/
-  public AsignacionDTO asignarDesdeStock(String productoID, Integer cantidadSolicitada, String necesidadID) {
+   *
+   * <p>Un paquete pertenece SIEMPRE a una sola donación. Si para cubrir el pedido hay que
+   * consumir stock de varias donaciones, se crea un paquete + una asignación por cada
+   * donación de origen: si se devolviera un único paquete con el donacionID de la primera,
+   * al reportar la entrega sólo se marcaría ACEPTADA esa donación y las demás quedarían
+   * colgadas en Donaciones.
+   *
+   * <p>Devuelve la lista de asignaciones creadas; vacía si no había nada para asignar
+   * (sin stock, o cantidad nula/cero) -> el controller responde 204 y el alta de la
+   * necesidad del otro módulo no se cae.
+   */
+  public List<AsignacionDTO> asignarDesdeStock(String productoID, Integer cantidadSolicitada, String necesidadID) {
     if (necesidadID == null || necesidadID.isBlank()) {
       throw new RuntimeException("La necesidad a asignar es obligatoria");
     }
@@ -168,7 +165,7 @@ public class Fachada implements FachadaLogistica {
       throw new RuntimeException("El producto a asignar es obligatorio");
     }
     if (cantidadSolicitada == null || cantidadSolicitada <= 0) {
-      return null; // no se pidió nada asignable -> 204, sin romper al solicitante
+      return List.of(); // no se pidió nada asignable
     }
 
     List<Deposito> depositos = depositoRepository.findAll();
@@ -178,41 +175,51 @@ public class Fachada implements FachadaLogistica {
             .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
             .sum();
     if (disponible <= 0) {
-      return null; // no hay stock del producto
+      return List.of(); // no hay stock del producto
     }
 
-    int aAsignar = Math.min(disponible, cantidadSolicitada);
-    int restante = aAsignar;
-    String donacionOrigen = null;
+    int restante = Math.min(disponible, cantidadSolicitada);
 
-    // Consume aAsignar unidades del stock (paquete completo o parcial).
+    // Cuántas unidades se consumen de cada donación de origen (orden de consumo preservado).
+    Map<String, Integer> consumidoPorDonacion = new LinkedHashMap<>();
+
     for (Deposito d : depositos) {
       boolean modificado = false;
       Iterator<Paquete> it = d.getStock().iterator();
       while (it.hasNext() && restante > 0) {
         Paquete p = it.next();
         if (!productoID.equals(p.getProductoID())) continue;
-        if (donacionOrigen == null) donacionOrigen = p.getDonacionID();
         int c = p.getCantidad() == null ? 0 : p.getCantidad();
-        if (c <= restante) {
-          restante -= c;
+        if (c <= 0) {
+          it.remove(); // paquete vacío: se limpia y no cuenta como consumo
+          modificado = true;
+          continue;
+        }
+        int consumido = Math.min(c, restante);
+        consumidoPorDonacion.merge(p.getDonacionID(), consumido, Integer::sum);
+        if (consumido == c) {
           it.remove(); // consume el paquete completo (orphanRemoval lo borra)
         } else {
-          p.setCantidad(c - restante); // consumo parcial
-          restante = 0;
+          p.setCantidad(c - consumido); // consumo parcial: el paquete se parte
         }
+        restante -= consumido;
         modificado = true;
       }
       if (modificado) depositoRepository.save(d);
       if (restante == 0) break;
     }
 
-    Paquete asignado = paqueteRepository.save(new Paquete(donacionOrigen, productoID, aAsignar));
-    Asignacion asignacion = asignacionRepository.save(
-            new Asignacion(String.valueOf(asignado.getId()), necesidadID,
-                    OrigenAsignacionEnum.SOLICITUD_DONADORES));
-    if (asignacionesSolicitudCounter != null) asignacionesSolicitudCounter.increment();
-    return mapper.map(asignacion);
+    List<AsignacionDTO> creadas = new ArrayList<>();
+    for (Map.Entry<String, Integer> origen : consumidoPorDonacion.entrySet()) {
+      Paquete asignado = paqueteRepository.save(
+              new Paquete(origen.getKey(), productoID, origen.getValue()));
+      Asignacion asignacion = asignacionRepository.save(
+              new Asignacion(String.valueOf(asignado.getId()), necesidadID,
+                      OrigenAsignacionEnum.SOLICITUD_DONADORES));
+      if (asignacionesSolicitudCounter != null) asignacionesSolicitudCounter.increment();
+      creadas.add(mapper.map(asignacion));
+    }
+    return creadas;
   }
 
   /** Unidades actualmente ocupadas en el stock del depósito (1 unidad por producto). */
