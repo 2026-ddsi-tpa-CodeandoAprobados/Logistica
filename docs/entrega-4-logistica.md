@@ -10,7 +10,7 @@ Los marcados **(nuevo)** se incorporaron en la Entrega 4.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/donaciones` | Recibe una donación: valida en Donaciones, verifica espacio y **encola** (o procesa sync si la mensajería está apagada). |
+| `POST` | `/donaciones` | Recibe una donación: verifica espacio en el depósito y **encola** (o procesa sync si la mensajería está apagada). No valida contra Donaciones que la donación exista — ver nota en el Flujo 1. |
 | `POST` | `/asignaciones` **(nuevo)** | Alta de asignación por matchmaking que hace el **Worker**. Body: `{donacionID, productoID, cantidad, necesidadID}`. |
 | `POST` | `/depositos/{id}/stock` **(nuevo)** | El Worker guarda el sobrante en el stock. Body: `{donacionID, productoID, cantidad}`. |
 | `GET` | `/stock/{productoID}` **(nuevo)** | Stock disponible de un producto, agregado de todos los depósitos. → `{productoID, cantidadDisponible}`. |
@@ -40,8 +40,8 @@ sequenceDiagram
     participant Wk as Worker (stateless)
     participant Ent as Entidades
     Don->>Log: POST /donaciones
-    Log->>Don: GET /donaciones/{id}
-    Note over Log: valida que exista + verifica espacio
+    Note over Log: verifica espacio en el depósito
+    Note over Log,Don: Logística NO valida contra Donaciones que la donación exista:<br/>Donaciones llama dentro de su transacción, antes del commit,<br/>y el callback no vería la fila (rollback en cadena).
     Log->>MQ: publica DonacionMessage
     Log-->>Don: 201 (depósito, stock aún vacío)
     MQ->>Wk: entrega el mensaje
