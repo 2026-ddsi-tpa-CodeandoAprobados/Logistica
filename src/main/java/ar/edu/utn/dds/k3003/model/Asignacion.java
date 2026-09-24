@@ -32,36 +32,23 @@ public class Asignacion {
         this.origen = origen;
     }
 
+    // Una asignación es inmutable salvo por su estado: el paquete, la necesidad, la fecha
+    // y el origen quedan fijos desde que se crea, así que no llevan setter.
+
     public String getId() {
         return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 
     public String getPaqueteID() {
         return paqueteID;
     }
 
-    public void setPaqueteID(String paqueteID) {
-        this.paqueteID = paqueteID;
-    }
-
     public String getNecesidadID() {
         return necesidadID;
     }
 
-    public void setNecesidadID(String necesidadID) {
-        this.necesidadID = necesidadID;
-    }
-
     public LocalDateTime getFecha() {
         return fecha;
-    }
-
-    public void setFecha(LocalDateTime fecha) {
-        this.fecha = fecha;
     }
 
     public EstadoAsginacionEnum getEstado() {
@@ -74,9 +61,5 @@ public class Asignacion {
 
     public OrigenAsignacionEnum getOrigen() {
         return origen;
-    }
-
-    public void setOrigen(OrigenAsignacionEnum origen) {
-        this.origen = origen;
     }
 }

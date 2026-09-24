@@ -1,5 +1,4 @@
 package ar.edu.utn.dds.k3003.clients;
 
-import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
-
-public record EstadoDonacionRequest (String estado){}
+/** Cuerpo del PATCH /donaciones/{id}/estado que Logística manda al reportar una entrega. */
+public record EstadoDonacionRequest(String estado) {}
