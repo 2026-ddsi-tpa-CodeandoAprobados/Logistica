@@ -3,6 +3,7 @@ package ar.edu.utn.dds.k3003.model;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.TipoNecesidadMaterialEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
+import ar.edu.utn.dds.k3003.exceptions.SinNecesidadElegibleException;
 import ar.edu.utn.dds.k3003.repositories.AsignacionRepository;
 import ar.edu.utn.dds.k3003.repositories.PaqueteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ public class Matchmaker {
                 .toList();
 
         if (elegibles.isEmpty()) {
-            throw new RuntimeException(
+            throw new SinNecesidadElegibleException(
                     "Ninguna necesidad puede ser satisfecha con esta donación " +
                             "(las recurrentes no admiten donaciones parciales)");
         }

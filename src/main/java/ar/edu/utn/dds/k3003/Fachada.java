@@ -1,404 +1,185 @@
 package ar.edu.utn.dds.k3003;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Counter;
-import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DonacionDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaLogistica;
-import ar.edu.utn.dds.k3003.model.*;
-import ar.edu.utn.dds.k3003.repositories.*;
-import ar.edu.utn.dds.k3003.clients.DonacionesClient;
-import ar.edu.utn.dds.k3003.clients.EntidadesClient;
-import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
-import ar.edu.utn.dds.k3003.messaging.DonacionMessage;
-import ar.edu.utn.dds.k3003.messaging.DonacionPublisher;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import ar.edu.utn.dds.k3003.model.Deposito;
+import ar.edu.utn.dds.k3003.model.Matchmaker;
+import ar.edu.utn.dds.k3003.service.AsignacionService;
+import ar.edu.utn.dds.k3003.service.DepositoService;
+import ar.edu.utn.dds.k3003.service.EntregaService;
+import ar.edu.utn.dds.k3003.service.MantenimientoService;
+import ar.edu.utn.dds.k3003.service.PaqueteService;
+import ar.edu.utn.dds.k3003.service.RecepcionDonacionService;
+import ar.edu.utn.dds.k3003.service.StockService;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import jakarta.annotation.PostConstruct;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.NoSuchElementException;
-import java.util.HashMap;
-import java.util.Map;
-
+/**
+ * Implementa el contrato {@code FachadaLogistica} de la cátedra y
+ * suma las operaciones propias que consumen el controller, el Worker y los otros módulos.
+ *
+ * <p>No tiene lógica de negocio. Cada operación delega en el servicio dueño de esa
+ * responsabilidad, y la transacción abarca la operación completa para que una recepción de
+ * donación, que hace varias escrituras, siga siendo atómica.
+ *
+ * <ul>
+ *   <li>{@code RecepcionDonacionService} — alta de donación y matchmaking.
+ *   <li>{@code StockService} — stock de los depósitos y asignación a pedido de Donadores.
+ *   <li>{@code AsignacionService} — altas y consultas de asignaciones.
+ *   <li>{@code EntregaService} — reporte de entrega y avisos a los otros módulos.
+ *   <li>{@code DepositoService}, {@code PaqueteService} — ABM y consultas.
+ * </ul>
+ */
 @Service
 @Transactional
 public class Fachada implements FachadaLogistica {
 
-  @Autowired private PaqueteRepository paqueteRepository;
-  @Autowired private DepositoRepository depositoRepository;
-  @Autowired private AsignacionRepository asignacionRepository;
-  @Autowired private LogisticaDataMapper mapper;
-  @Autowired private Matchmaker matchmaker;
-  @Autowired(required = false) private MeterRegistry meterRegistry;
-  @Autowired(required = false) private EntidadesClient entidadesClient;
-  @Autowired(required = false) private DonacionesClient donacionesClient;
-  @Autowired(required = false) private DonacionPublisher donacionPublisher;
+  private final RecepcionDonacionService recepcionDonacionService;
+  private final DepositoService depositoService;
+  private final StockService stockService;
+  private final AsignacionService asignacionService;
+  private final PaqueteService paqueteService;
+  private final EntregaService entregaService;
+  private final MantenimientoService mantenimientoService;
+  private final Matchmaker matchmaker;
 
-  private Counter entregasCompletadasCounter;
-  private Counter asignacionesMatchmakingCounter;
-  private Counter asignacionesSolicitudCounter;
-  private Counter paquetesEnStockCounter;
+  public Fachada(RecepcionDonacionService recepcionDonacionService,
+                 DepositoService depositoService,
+                 StockService stockService,
+                 AsignacionService asignacionService,
+                 PaqueteService paqueteService,
+                 EntregaService entregaService,
+                 MantenimientoService mantenimientoService,
+                 Matchmaker matchmaker) {
+    this.recepcionDonacionService = recepcionDonacionService;
+    this.depositoService = depositoService;
+    this.stockService = stockService;
+    this.asignacionService = asignacionService;
+    this.paqueteService = paqueteService;
+    this.entregaService = entregaService;
+    this.mantenimientoService = mantenimientoService;
+    this.matchmaker = matchmaker;
+  }
 
-  public Fachada() {}
+  // ---------------- Donaciones ----------------
 
-  @PostConstruct
-  public void initMetrics() {
-    if (meterRegistry != null) {
-      this.entregasCompletadasCounter = Counter.builder("logistica.entregas_completadas")
-              .tag("modulo", "logistica")
-              .register(meterRegistry);
-      this.asignacionesMatchmakingCounter = Counter.builder("logistica.asignaciones_matchmaking")
-              .tag("modulo", "logistica")
-              .register(meterRegistry);
-      this.asignacionesSolicitudCounter = Counter.builder("logistica.asignaciones_solicitud_donadores")
-              .tag("modulo", "logistica")
-              .register(meterRegistry);
-      this.paquetesEnStockCounter = Counter.builder("logistica.paquetes_en_stock")
-              .tag("modulo", "logistica")
-              .register(meterRegistry);
-    }
+  @Override
+  public DepositoDTO gestionarDonacion(DonacionDTO donacion) {
+    return recepcionDonacionService.recibir(donacion);
+  }
+
+  /** Entrega 4 - Parte B. Alta de asignación que pide el Worker, que no tiene base de datos. */
+  public AsignacionDTO altaAsignacionDesdeWorker(String donacionID, String productoID,
+                                                 int cantidad, String necesidadID) {
+    return asignacionService.asignarPorMatchmaking(donacionID, productoID, cantidad, necesidadID);
+  }
+
+  /** Entrega 4 - Parte B. Sobrante que el Worker manda a guardar. */
+  public DepositoDTO guardarSobranteEnStock(String depositoID, String donacionID,
+                                            String productoID, int cantidad) {
+    return stockService.guardarSobrante(depositoID, donacionID, productoID, cantidad);
+  }
+
+  // ---------------- Stock ----------------
+
+  public int stockDisponible(String productoID) {
+    return stockService.disponible(productoID);
+  }
+
+  public List<AsignacionDTO> asignarDesdeStock(String productoID, Integer cantidad,
+                                               String necesidadID) {
+    return stockService.asignarDesdeStock(productoID, cantidad, necesidadID);
+  }
+
+  // ---------------- Entregas ----------------
+
+  @Override
+  public void reportarEntrega(PaqueteDTO paquete) {
+    entregaService.reportar(paquete);
+  }
+
+  // ---------------- Depósitos ----------------
+
+  @Override
+  public DepositoDTO agregarDeposito(DepositoDTO deposito) {
+    return depositoService.crear(deposito);
   }
 
   @Override
-  public DepositoDTO gestionarDonacion(DonacionDTO donacionDTO) {
-    if (donacionDTO == null || donacionDTO.detallesProductosDTO() == null || donacionDTO.detallesProductosDTO().isEmpty()) {
-      throw new RuntimeException("La donación está vacía o es nula");
-    }
-
-    Deposito deposito = depositoRepository.findById(Integer.valueOf(donacionDTO.depositoID()))
-            .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
-
-    // Entrega 4 - Parte A/B: verificar espacio ANTES de procesar, contra el total de la donación.
-    int totalUnidades = 0;
-    for (var detalle : donacionDTO.detallesProductosDTO()) {
-      if (detalle.cantidadProducto() == null || detalle.cantidadProducto() <= 0) {
-        throw new RuntimeException("Cantidad inválida");
-      }
-      totalUnidades += detalle.cantidadProducto();
-    }
-    verificarEspacio(deposito, totalUnidades);
-
-    // Entrega 4 - Parte B: si la mensajería está activa, se encola y un Worker asigna async.
-    if (donacionPublisher != null) {
-      List<DonacionMessage.Item> items = donacionDTO.detallesProductosDTO().stream()
-              .map(d -> new DonacionMessage.Item(d.productoID(), d.cantidadProducto()))
-              .toList();
-      donacionPublisher.publicar(new DonacionMessage(
-              donacionDTO.id(), donacionDTO.depositoID(), deposito.getAlgoritmo(), items));
-      return mapper.map(deposito);
-    }
-
-    //(Parte A): se procesa en el momento.
-    for (var detalle : donacionDTO.detallesProductosDTO()) {
-      procesarDetalle(deposito, donacionDTO.id(), detalle.productoID(), detalle.cantidadProducto());
-    }
-
-    return mapper.map(deposito);
+  public DepositoDTO buscarDepositoPorID(String depositoID) {
+    return depositoService.buscarPorID(depositoID);
   }
 
-  /**
-   * Entrega 4 - Parte B. Alta de asignación solicitada por el Worker (que no tiene BD).
-   * Crea el paquete de la porción asignada y la asignación por matchmaking.
-   */
-  public AsignacionDTO altaAsignacionDesdeWorker(String donacionID, String productoID,
-                                                 int cantidad, String necesidadID) {
-    Paquete paquete = paqueteRepository.save(new Paquete(donacionID, productoID, cantidad));
-    Asignacion asignacion = asignacionRepository.save(
-            new Asignacion(String.valueOf(paquete.getId()), necesidadID,
-                    OrigenAsignacionEnum.MATCHMAKING));
-    if (asignacionesMatchmakingCounter != null) asignacionesMatchmakingCounter.increment();
-    return mapper.map(asignacion);
+  @Override
+  public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum algoritmo) {
+    depositoService.configurarAlgoritmo(depositoID, algoritmo);
   }
 
-  /** Entrega 4 - Parte B. Guarda en stock el sobrante que le indica el Worker. */
-  public DepositoDTO guardarSobranteEnStock(String depositoID, String donacionID,
-                                            String productoID, int cantidad) {
-    Deposito deposito = depositoRepository.findById(Integer.valueOf(depositoID))
-            .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
-    guardarEnStock(deposito, donacionID, productoID, cantidad);
-    return mapper.map(deposito);
+  public List<DepositoDTO> buscarTodosLosDepositos() {
+    return depositoService.buscarTodos();
   }
 
-  /**
-   * Entrega 4 - Donadores. Stock disponible de un producto sumando el stock de TODOS
-   * los depósitos (Donadores consulta por producto, sin conocer depósitos).
-   */
-  public int stockDisponible(String productoID) {
-    return depositoRepository.findAll().stream()
-            .flatMap(d -> d.getStock().stream())
-            .filter(p -> productoID.equals(p.getProductoID()))
-            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
-            .sum();
+  public DepositoDTO eliminarDeposito(String depositoID) {
+    return depositoService.eliminar(depositoID);
   }
 
-  /**
-   * Entrega 4 - Donadores. Asigna stock a una necesidad por solicitud de "Donadores y
-   * Entidades": asigna min(disponible, solicitada), consume ese stock y crea la asignación
-   * con origen SOLICITUD_DONADORES (para diferenciarla del matchmaking en Incentivos).
-   *
-   * <p>Un paquete pertenece SIEMPRE a una sola donación. Si para cubrir el pedido hay que
-   * consumir stock de varias donaciones, se crea un paquete + una asignación por cada
-   * donación de origen: si se devolviera un único paquete con el donacionID de la primera,
-   * al reportar la entrega sólo se marcaría ACEPTADA esa donación y las demás quedarían
-   * colgadas en Donaciones.
-   *
-   * <p>Devuelve la lista de asignaciones creadas; vacía si no había nada para asignar
-   * (sin stock, o cantidad nula/cero) -> el controller responde 204 y el alta de la
-   * necesidad del otro módulo no se cae.
-   */
-  public List<AsignacionDTO> asignarDesdeStock(String productoID, Integer cantidadSolicitada, String necesidadID) {
-    if (necesidadID == null || necesidadID.isBlank()) {
-      throw new RuntimeException("La necesidad a asignar es obligatoria");
-    }
-    if (productoID == null || productoID.isBlank()) {
-      throw new RuntimeException("El producto a asignar es obligatorio");
-    }
-    if (cantidadSolicitada == null || cantidadSolicitada <= 0) {
-      return List.of(); // no se pidió nada asignable
-    }
+  // ---------------- Paquetes y asignaciones ----------------
 
-    List<Deposito> depositos = depositoRepository.findAll();
-    int disponible = depositos.stream()
-            .flatMap(d -> d.getStock().stream())
-            .filter(p -> productoID.equals(p.getProductoID()))
-            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
-            .sum();
-    if (disponible <= 0) {
-      return List.of(); // no hay stock del producto
-    }
-
-    int restante = Math.min(disponible, cantidadSolicitada);
-
-    // Cuántas unidades se consumen de cada donación de origen (orden de consumo preservado).
-    Map<String, Integer> consumidoPorDonacion = new LinkedHashMap<>();
-
-    for (Deposito d : depositos) {
-      boolean modificado = false;
-      Iterator<Paquete> it = d.getStock().iterator();
-      while (it.hasNext() && restante > 0) {
-        Paquete p = it.next();
-        if (!productoID.equals(p.getProductoID())) continue;
-        int c = p.getCantidad() == null ? 0 : p.getCantidad();
-        if (c <= 0) {
-          it.remove(); // paquete vacío: se limpia y no cuenta como consumo
-          modificado = true;
-          continue;
-        }
-        int consumido = Math.min(c, restante);
-        consumidoPorDonacion.merge(p.getDonacionID(), consumido, Integer::sum);
-        if (consumido == c) {
-          it.remove(); // consume el paquete completo (orphanRemoval lo borra)
-        } else {
-          p.setCantidad(c - consumido); // consumo parcial: el paquete se parte
-        }
-        restante -= consumido;
-        modificado = true;
-      }
-      if (modificado) depositoRepository.save(d);
-      if (restante == 0) break;
-    }
-
-    List<AsignacionDTO> creadas = new ArrayList<>();
-    for (Map.Entry<String, Integer> origen : consumidoPorDonacion.entrySet()) {
-      Paquete asignado = paqueteRepository.save(
-              new Paquete(origen.getKey(), productoID, origen.getValue()));
-      Asignacion asignacion = asignacionRepository.save(
-              new Asignacion(String.valueOf(asignado.getId()), necesidadID,
-                      OrigenAsignacionEnum.SOLICITUD_DONADORES));
-      if (asignacionesSolicitudCounter != null) asignacionesSolicitudCounter.increment();
-      creadas.add(mapper.map(asignacion));
-    }
-    return creadas;
+  public PaqueteDTO buscarPaquetePorID(String paqueteID) {
+    return paqueteService.buscarPorID(paqueteID);
   }
 
-  /** Unidades actualmente ocupadas en el stock del depósito (1 unidad por producto). */
-  private int ocupadoDe(Deposito deposito) {
-    return deposito.getStock().stream()
-            .mapToInt(p -> p.getCantidad() == null ? 0 : p.getCantidad())
-            .sum();
-  }
-
-  /**
-   * Verifica que entren {@code unidadesRequeridas} en el depósito (regla de recepción 1A/1B).
-   * Reutilizable por Parte B antes de encolar la donación.
-   */
-  private void verificarEspacio(Deposito deposito, int unidadesRequeridas) {
-    Integer capacidad = deposito.getCapacidadMaxima();
-    if (capacidad == null) {
-      return; // sin capacidad definida -> sin límite
-    }
-    int ocupado = ocupadoDe(deposito);
-    if (ocupado + unidadesRequeridas > capacidad) {
-      throw new RuntimeException("El depósito " + deposito.getId()
-              + " no tiene espacio para la donación (capacidad " + capacidad
-              + ", ocupado " + ocupado + ", requiere " + unidadesRequeridas + ")");
-    }
-  }
-
-  /**
-   * Entrega 4 - Parte A. Para el producto donado:
-   *  - Si no hay necesidades insatisfechas -> las unidades van al stock.
-   *  - Si hay necesidades -> el matchmaking elige la mejor; se asigna min(donado, faltante)
-   *    (esa porción NO pasa por el stock) y el sobrante se guarda en el stock.
-   *  Puede generar 2 paquetes con el mismo donacionID (uno asignado y otro en stock).
-   */
-  private void procesarDetalle(Deposito deposito, String donacionID, String productoID, int cantidad) {
-    List<NecesidadMaterialDTO> necesidades = (entidadesClient != null)
-            ? entidadesClient.getAllNecesidadesDeUnProducto(productoID)
-            : null;
-
-    if (necesidades == null || necesidades.isEmpty()) {
-      guardarEnStock(deposito, donacionID, productoID, cantidad);
-      return;
-    }
-
-    NecesidadMaterialDTO necesidad;
-    try {
-      necesidad = matchmaker.calcularMejorOpcion(necesidades, deposito.getAlgoritmo(), cantidad);
-    } catch (RuntimeException e) {
-      // No hay necesidad elegible (p.ej. sólo recurrentes que no se pueden cubrir por completo) -> stock
-      guardarEnStock(deposito, donacionID, productoID, cantidad);
-      return;
-    }
-
-    int aAsignar = matchmaker.cantidadAAsignar(necesidad, cantidad);
-    if (aAsignar <= 0) {
-      guardarEnStock(deposito, donacionID, productoID, cantidad);
-      return;
-    }
-
-    // Porción asignada a la necesidad: paquete separado, no ocupa stock.
-    Paquete paqueteAsignado = paqueteRepository.save(new Paquete(donacionID, productoID, aAsignar));
-    asignacionRepository.save(
-            new Asignacion(String.valueOf(paqueteAsignado.getId()), necesidad.id(),
-                    OrigenAsignacionEnum.MATCHMAKING));
-    if (asignacionesMatchmakingCounter != null) asignacionesMatchmakingCounter.increment();
-
-    int sobrante = cantidad - aAsignar;
-    if (sobrante > 0) {
-      guardarEnStock(deposito, donacionID, productoID, sobrante);
-    }
-  }
-
-  /**
-   * Guarda unidades en el stock del depósito respetando la capacidad máxima
-   * (1 unidad por producto). La cascada de Deposito -> stock persiste el Paquete
-   * y le setea el deposito_id.
-   */
-  private void guardarEnStock(Deposito deposito, String donacionID, String productoID, int cantidad) {
-    verificarEspacio(deposito, cantidad);
-    deposito.getStock().add(new Paquete(donacionID, productoID, cantidad));
-    depositoRepository.save(deposito);
-    if (paquetesEnStockCounter != null) paquetesEnStockCounter.increment();
+  public List<PaqueteDTO> buscarTodosLosPaquetes() {
+    return paqueteService.buscarTodos();
   }
 
   public List<AsignacionDTO> buscarTodasLasAsignaciones() {
-    return asignacionRepository.findAll().stream().map(mapper::map).toList();
+    return asignacionService.buscarTodas();
+  }
+
+  public AsignacionDTO buscarAsignacionPorID(String asignacionID) {
+    return asignacionService.buscarPorID(asignacionID);
   }
 
   @Override
-  public void reportarEntrega(PaqueteDTO p) {
-    Asignacion a = asignacionRepository.findByPaqueteID(p.id()).orElseThrow();
-
-    if (this.entidadesClient != null) {
-      try {
-        Map<String, Integer> requestBody = new HashMap<>();
-        requestBody.put("cantidad", p.cantidad());
-        this.entidadesClient.postSatisfacerNecesidad(a.getNecesidadID(), requestBody);
-      } catch (Exception ex) {
-        System.err.println("Error al satisfacer necesidad: " + ex.getMessage());
-      }
-    }
-
-    if (this.donacionesClient != null) {
-      try {
-        EstadoDonacionRequest request =
-                new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA));
-        this.donacionesClient.actualizarEstadoDonacion(p.donacionID().toString(), request);
-      } catch (Exception e) {
-        System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
-      }
-    }
-
-    a.setEstado(EstadoAsginacionEnum.COMPLETADA);
-    asignacionRepository.save(a);
-    if (entregasCompletadasCounter != null) entregasCompletadasCounter.increment();
-  }
-
-  @Override public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades f) {}
-  @Override public void setFachadaDonaciones(FachadaDonaciones f) {}
-  @Override public DepositoDTO agregarDeposito(DepositoDTO dto) { return mapper.map(depositoRepository.save(mapper.map(dto))); }
-  @Override public DepositoDTO buscarDepositoPorID(String id) { return mapper.map(depositoRepository.findById(Integer.valueOf(id)).orElseThrow()); }
-  @Override public void setAlgoritmoMM(String id, TipoAlgoritmoEnum alg) {
-    Deposito d = depositoRepository.findById(Integer.valueOf(id)).orElseThrow();
-    d.setAlgoritmo(alg);
-    depositoRepository.save(d);
-  }
-
-  public PaqueteDTO buscarPaquetePorID(String id) {
-    Paquete paquete = paqueteRepository.findById(Integer.valueOf(id))
-            .orElseThrow(() -> new NoSuchElementException("Paquete no encontrado"));
-    return new PaqueteDTO(
-            String.valueOf(paquete.getId()),
-            paquete.getDonacionID(),
-            paquete.getProductoID(),
-            paquete.getCantidad()
-    );
-  }
-  public List<PaqueteDTO> buscarTodosLosPaquetes() {
-    return paqueteRepository.findAll().stream()
-            .map(p -> new PaqueteDTO(String.valueOf(p.getId()), p.getDonacionID(), p.getProductoID(), p.getCantidad()))
-            .toList();
+  public AsignacionDTO buscarAsignacionPorPaqueteID(String paqueteID) {
+    return asignacionService.buscarPorPaqueteID(paqueteID);
   }
 
   @Override
-  public AsignacionDTO ejecutarMatchmaking(String id, PaqueteDTO p,
-                                           List<NecesidadMaterialDTO> n) {
-
-    Deposito deposito = depositoRepository.findById(Integer.valueOf(id))
-            .orElseThrow(() -> new NoSuchElementException("Depósito no encontrado"));
-
-    NecesidadMaterialDTO e = matchmaker.calcularMejorOpcion(n, deposito.getAlgoritmo(), p.cantidad());
-    Asignacion asignacion = asignacionRepository.save(new Asignacion(p.id(), e.id()));
-    return mapper.map(asignacion);
+  public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paquete,
+                                           List<NecesidadMaterialDTO> necesidades) {
+    Deposito deposito = depositoService.obtener(depositoID);
+    NecesidadMaterialDTO elegida =
+            matchmaker.calcularMejorOpcion(necesidades, deposito.getAlgoritmo(), paquete.cantidad());
+    return asignacionService.asignarPaqueteExistente(paquete.id(), elegida.id());
   }
 
-  @Override public AsignacionDTO buscarAsignacionPorPaqueteID(String id) { return mapper.map(asignacionRepository.findByPaqueteID(id).orElseThrow()); }
-  public AsignacionDTO buscarAsignacionPorID(String id) { return mapper.map(asignacionRepository.findById(id).orElseThrow()); }
-  public List<DepositoDTO> buscarTodosLosDepositos() { return depositoRepository.findAll().stream().map(mapper::map).toList(); }
-  public DepositoDTO eliminarDeposito(String id) {
-    Deposito d = depositoRepository.findById(Integer.valueOf(id)).orElseThrow();
-    depositoRepository.deleteById(Integer.valueOf(id));
-    return mapper.map(d);
-  }
+  // ---------------- Mantenimiento ----------------
+
   public void limpiarBaseDeDatos() {
-    asignacionRepository.deleteAll();
-    paqueteRepository.deleteAll();
-    depositoRepository.deleteAll();
+    mantenimientoService.limpiarBaseDeDatos();
   }
 
-  public Object debugNecesidades(String productoID) {
-    if (entidadesClient == null) {
-      return "PROBLEMA: entidadesClient es NULL — el cliente Feign nunca se inyectó";
-    }
-    try {
-      List<NecesidadMaterialDTO> resultado = entidadesClient.getAllNecesidadesDeUnProducto(productoID);
-      return resultado;
-    } catch (Exception e) {
-      return "ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage();
-    }
+  // ---------------- Contrato de la cátedra ----------------
+  // La integración con los otros módulos es por HTTP (Feign), no por referencias en memoria,
+  // así que estos dos setters existen sólo para cumplir la interfaz.
+
+  @Override
+  public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades fachada) {
+    // sin efecto: ver EntidadesClient
   }
 
+  @Override
+  public void setFachadaDonaciones(FachadaDonaciones fachada) {
+    // sin efecto: ver DonacionesClient
+  }
 }
-
