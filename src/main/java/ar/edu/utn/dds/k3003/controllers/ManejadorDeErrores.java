@@ -4,6 +4,8 @@ import ar.edu.utn.dds.k3003.exceptions.CapacidadInsuficienteException;
 import ar.edu.utn.dds.k3003.exceptions.RecursoNoEncontradoException;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
 import java.util.NoSuchElementException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +23,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  */
 @RestControllerAdvice
 public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
+
+  private static final Logger log = LoggerFactory.getLogger(ManejadorDeErrores.class);
 
   /** No existe el depósito, el paquete o la asignación que se pidió. */
   @ExceptionHandler(RecursoNoEncontradoException.class)
@@ -61,10 +65,16 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
     return problema(HttpStatus.BAD_REQUEST, "Identificador inválido", e.getMessage());
   }
 
-  /** Cualquier otra cosa: no se filtra el stack trace, sólo el mensaje. */
+  /**
+   * Cualquier otra cosa. El detalle técnico va al log con su stack trace y al cliente sólo le
+   * llega un mensaje genérico: el texto de una excepción inesperada expone clases y versiones
+   * internas, y sin el log el fallo queda invisible del lado del servidor.
+   */
   @ExceptionHandler(Exception.class)
   public ProblemDetail errorInesperado(Exception e) {
-    return problema(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno de Logística", e.getMessage());
+    log.error("Error inesperado procesando el pedido", e);
+    return problema(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno de Logística",
+            "Ocurrió un error inesperado. Revisá los logs del servicio.");
   }
 
   private ProblemDetail problema(HttpStatus estado, String titulo, String detalle) {
