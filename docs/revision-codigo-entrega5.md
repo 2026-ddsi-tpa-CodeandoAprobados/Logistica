@@ -182,7 +182,10 @@ tienen valor por defecto, así que la aplicación no arranca en una máquina lim
    líneas, y el depósito recuperó sus reglas de capacidad y de consumo de stock. Antes del
    cambio se escribieron ocho tests de caracterización sobre los flujos principales, con
    los módulos vecinos simulados; los catorce tests siguen en verde después.
-4. Logging centralizado sobre los flujos ya ordenados.
+4. ~~Logging centralizado~~ **hecho en el código, falta cargar el token.** Appender de Better
+   Stack condicionado a una variable de entorno, filtro y propagación de trazas entre módulos,
+   traza a través de la cola y eventos de negocio registrados. Ver
+   [logging-y-trazas.md](logging-y-trazas.md).
 5. Métricas de dominio y alarmas.
 6. Completar ABM y algoritmo de matchmaking.
 7. MCP Server contra la API terminada.

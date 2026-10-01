@@ -8,6 +8,8 @@ import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
 import ar.edu.utn.dds.k3003.model.Asignacion;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class EntregaService {
+
+  private static final Logger log = LoggerFactory.getLogger(EntregaService.class);
 
   private final AsignacionService asignacionService;
   private final MetricasLogistica metricas;
@@ -39,36 +43,51 @@ public class EntregaService {
 
   public void reportar(PaqueteDTO paquete) {
     Asignacion asignacion = asignacionService.obtenerPorPaqueteID(paquete.id());
+    log.info("Entrega del paquete {}: donación {}, necesidad {}, {} unidades",
+            paquete.id(), paquete.donacionID(), asignacion.getNecesidadID(), paquete.cantidad());
 
-    satisfacerNecesidad(asignacion.getNecesidadID(), paquete.cantidad());
-    marcarDonacionAceptada(paquete.donacionID());
+    boolean necesidadSatisfecha = satisfacerNecesidad(asignacion.getNecesidadID(), paquete.cantidad());
+    boolean donacionActualizada = marcarDonacionAceptada(paquete.donacionID());
 
     asignacionService.completar(asignacion);
     metricas.entregaCompletada();
+    log.info("Entrega del paquete {} completada. Necesidad satisfecha: {}. Donación aceptada: {}",
+            paquete.id(), necesidadSatisfecha, donacionActualizada);
   }
 
-  private void satisfacerNecesidad(String necesidadID, Integer cantidad) {
+  /**
+   * Avisa a Entidades. Un fallo no frena la entrega, pero deja un WARN con lo necesario para
+   * repararlo a mano: sin él, la asignación figuraría completada con la necesidad todavía abierta.
+   */
+  private boolean satisfacerNecesidad(String necesidadID, Integer cantidad) {
     if (entidadesClient == null) {
-      return;
+      return false;
     }
     try {
       Map<String, Integer> cuerpo = new HashMap<>();
       cuerpo.put("cantidad", cantidad);
       entidadesClient.postSatisfacerNecesidad(necesidadID, cuerpo);
+      return true;
     } catch (Exception e) {
-      System.err.println("Error al satisfacer necesidad: " + e.getMessage());
+      log.warn("No se pudo satisfacer la necesidad {} en Entidades ({} unidades): {}",
+              necesidadID, cantidad, e.getMessage());
+      return false;
     }
   }
 
-  private void marcarDonacionAceptada(String donacionID) {
+  /** Avisa a Donaciones. Misma política: un fallo se registra y la entrega sigue. */
+  private boolean marcarDonacionAceptada(String donacionID) {
     if (donacionesClient == null) {
-      return;
+      return false;
     }
     try {
       donacionesClient.actualizarEstadoDonacion(donacionID,
               new EstadoDonacionRequest(String.valueOf(EstadoDonacionEnum.ACEPTADA)));
+      return true;
     } catch (Exception e) {
-      System.err.println("Error al actualizar estado en Donaciones: " + e.getMessage());
+      log.warn("No se pudo marcar la donación {} como ACEPTADA en Donaciones: {}",
+              donacionID, e.getMessage());
+      return false;
     }
   }
 }

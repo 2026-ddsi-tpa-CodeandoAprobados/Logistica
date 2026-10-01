@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class StockService {
+
+  private static final Logger log = LoggerFactory.getLogger(StockService.class);
 
   private final DepositoService depositoService;
   private final AsignacionService asignacionService;
@@ -78,12 +82,16 @@ public class StockService {
       throw new SolicitudInvalidaException("El producto a asignar es obligatorio");
     }
     if (cantidadSolicitada == null || cantidadSolicitada <= 0) {
+      log.info("Donadores pidió stock de {} para la necesidad {} sin cantidad asignable, nada que hacer",
+              productoID, necesidadID);
       return List.of(); // no se pidió nada asignable
     }
 
     List<Deposito> depositos = depositoService.obtenerTodos();
     int disponible = depositos.stream().mapToInt(d -> d.stockDe(productoID)).sum();
     if (disponible <= 0) {
+      log.info("Donadores pidió {} unidades de {} para la necesidad {}: no hay stock",
+              cantidadSolicitada, productoID, necesidadID);
       return List.of(); // no hay stock del producto
     }
 
@@ -107,6 +115,9 @@ public class StockService {
     consumidoPorDonacion.forEach((donacionID, unidades) ->
             creadas.add(asignacionService.asignarPorSolicitud(
                     donacionID, productoID, unidades, necesidadID)));
+    log.info("Donadores pidió {} unidades de {} para la necesidad {}: había {}, se asignaron {} en {} asignaciones",
+            cantidadSolicitada, productoID, necesidadID, disponible,
+            consumidoPorDonacion.values().stream().mapToInt(Integer::intValue).sum(), creadas.size());
     return creadas;
   }
 }

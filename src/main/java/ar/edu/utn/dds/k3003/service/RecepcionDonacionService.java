@@ -4,14 +4,18 @@ import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DonacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
 import ar.edu.utn.dds.k3003.clients.EntidadesClient;
+import ar.edu.utn.dds.k3003.exceptions.CapacidadInsuficienteException;
 import ar.edu.utn.dds.k3003.exceptions.SinNecesidadElegibleException;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
+import ar.edu.utn.dds.k3003.logging.Traza;
 import ar.edu.utn.dds.k3003.messaging.DonacionMessage;
 import ar.edu.utn.dds.k3003.messaging.DonacionPublisher;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.model.Matchmaker;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class RecepcionDonacionService {
+
+  private static final Logger log = LoggerFactory.getLogger(RecepcionDonacionService.class);
 
   private final DepositoService depositoService;
   private final StockService stockService;
@@ -61,19 +67,34 @@ public class RecepcionDonacionService {
     }
 
     Deposito deposito = depositoService.obtener(donacion.depositoID());
-    deposito.verificarEspacioPara(totalDeUnidades(donacion));
+    int unidades = totalDeUnidades(donacion);
+    verificarEspacio(deposito, donacion, unidades);
 
     // Entrega 4 - Parte B: con mensajería activa se encola y un Worker asigna de forma async,
     // así que el stock que se devuelve todavía no refleja esta donación.
     if (donacionPublisher != null) {
+      log.info("Donación {} recibida en el depósito {}: {} unidades en {} productos, se encola",
+              donacion.id(), deposito.getId(), unidades, donacion.detallesProductosDTO().size());
       encolar(donacion, deposito);
       return mapper.map(deposito);
     }
 
+    log.info("Donación {} recibida en el depósito {}: {} unidades en {} productos, se procesa",
+            donacion.id(), deposito.getId(), unidades, donacion.detallesProductosDTO().size());
     for (var detalle : donacion.detallesProductosDTO()) {
       procesarDetalle(deposito, donacion.id(), detalle.productoID(), detalle.cantidadProducto());
     }
     return mapper.map(deposito);
+  }
+
+  /** Una donación rechazada por falta de espacio es un evento de negocio: se deja constancia. */
+  private void verificarEspacio(Deposito deposito, DonacionDTO donacion, int unidades) {
+    try {
+      deposito.verificarEspacioPara(unidades);
+    } catch (CapacidadInsuficienteException e) {
+      log.warn("Donación {} rechazada por capacidad: {}", donacion.id(), e.getMessage());
+      throw e;
+    }
   }
 
   /** Suma las unidades de la donación y valida de paso que todas las cantidades sean positivas. */
@@ -94,7 +115,7 @@ public class RecepcionDonacionService {
             .map(d -> new DonacionMessage.Item(d.productoID(), d.cantidadProducto()))
             .toList();
     donacionPublisher.publicar(new DonacionMessage(
-            donacion.id(), donacion.depositoID(), deposito.getAlgoritmo(), items));
+            donacion.id(), donacion.depositoID(), deposito.getAlgoritmo(), items, Traza.actual()));
   }
 
   /**
@@ -109,6 +130,8 @@ public class RecepcionDonacionService {
             : null;
 
     if (necesidades == null || necesidades.isEmpty()) {
+      log.info("Donación {}, producto {}: sin necesidades insatisfechas, {} unidades al stock",
+              donacionID, productoID, cantidad);
       stockService.guardar(deposito, donacionID, productoID, cantidad);
       return;
     }
@@ -118,6 +141,8 @@ public class RecepcionDonacionService {
       necesidad = matchmaker.calcularMejorOpcion(necesidades, deposito.getAlgoritmo(), cantidad);
     } catch (SinNecesidadElegibleException e) {
       // Sólo hay recurrentes que no se pueden cubrir por completo -> todo al stock.
+      log.info("Donación {}, producto {}: ninguna necesidad es elegible, {} unidades al stock",
+              donacionID, productoID, cantidad);
       stockService.guardar(deposito, donacionID, productoID, cantidad);
       return;
     }
@@ -129,9 +154,13 @@ public class RecepcionDonacionService {
     }
 
     asignacionService.asignarPorMatchmaking(donacionID, productoID, aAsignar, necesidad.id());
+    log.info("Donación {}, producto {}: {} de {} unidades asignadas a la necesidad {}",
+            donacionID, productoID, aAsignar, cantidad, necesidad.id());
 
     int sobrante = cantidad - aAsignar;
     if (sobrante > 0) {
+      log.info("Donación {}, producto {}: {} unidades sobrantes al stock",
+              donacionID, productoID, sobrante);
       stockService.guardar(deposito, donacionID, productoID, sobrante);
     }
   }

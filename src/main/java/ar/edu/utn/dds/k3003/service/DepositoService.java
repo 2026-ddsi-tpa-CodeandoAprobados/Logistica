@@ -8,6 +8,8 @@ import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.repositories.DepositoRepository;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class DepositoService {
+
+  private static final Logger log = LoggerFactory.getLogger(DepositoService.class);
 
   private final DepositoRepository depositoRepository;
   private final LogisticaDataMapper mapper;
@@ -25,7 +29,9 @@ public class DepositoService {
   }
 
   public DepositoDTO crear(DepositoDTO dto) {
-    return mapper.map(depositoRepository.save(mapper.map(dto)));
+    DepositoDTO creado = mapper.map(depositoRepository.save(mapper.map(dto)));
+    log.info("Depósito {} creado: {}, capacidad {}", creado.id(), creado.nombre(), creado.capacidadMaxima());
+    return creado;
   }
 
   @Transactional(readOnly = true)
@@ -41,6 +47,7 @@ public class DepositoService {
   public DepositoDTO eliminar(String depositoID) {
     Deposito deposito = obtener(depositoID);
     depositoRepository.delete(deposito);
+    log.info("Depósito {} eliminado junto con {} paquetes en stock", depositoID, deposito.getStock().size());
     return mapper.map(deposito);
   }
 
@@ -48,6 +55,7 @@ public class DepositoService {
     Deposito deposito = obtener(depositoID);
     deposito.setAlgoritmo(algoritmo);
     depositoRepository.save(deposito);
+    log.info("Depósito {}: algoritmo de matchmaking configurado en {}", depositoID, algoritmo);
   }
 
   // ---------------- Para los demás servicios del módulo ----------------
