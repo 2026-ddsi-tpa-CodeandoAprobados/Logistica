@@ -94,8 +94,10 @@ class DocumentacionApiTest {
     assertThat(codigos(operacion("/depositos/{id}", "get"))).contains("400", "404");
     assertThat(codigos(operacion("/donaciones", "post"))).contains("400", "404", "409");
     assertThat(codigos(operacion("/depositos/{id}/stock", "post"))).contains("404", "409");
-    assertThat(codigos(operacion("/entregas", "post"))).contains("404");
+    assertThat(codigos(operacion("/entregas", "post"))).contains("404", "409");
     assertThat(codigos(operacion("/asignaciones/{id}", "get"))).contains("404");
+    assertThat(codigos(operacion("/depositos/{id}", "put"))).contains("200", "400", "404", "409");
+    assertThat(codigos(operacion("/depositos/{id}", "delete"))).contains("204", "404", "409");
   }
 
   @Test

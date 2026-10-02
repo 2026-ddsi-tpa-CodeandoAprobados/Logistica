@@ -1,6 +1,7 @@
 package ar.edu.utn.dds.k3003.controllers;
 
 import ar.edu.utn.dds.k3003.exceptions.CapacidadInsuficienteException;
+import ar.edu.utn.dds.k3003.exceptions.OperacionNoPermitidaException;
 import ar.edu.utn.dds.k3003.exceptions.RecursoNoEncontradoException;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
 import java.util.NoSuchElementException;
@@ -51,6 +52,12 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
     detalle.setProperty("requerido", e.getRequerido());
     detalle.setProperty("faltante", e.getFaltante());
     return detalle;
+  }
+
+  /** El pedido es válido, pero el estado actual de los datos no permite hacerlo. */
+  @ExceptionHandler(OperacionNoPermitidaException.class)
+  public ProblemDetail operacionNoPermitida(OperacionNoPermitidaException e) {
+    return problema(HttpStatus.CONFLICT, "Operación no permitida", e.getMessage());
   }
 
   /** Red de contención para cualquier orElseThrow que todavía no esté tipado. */

@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Administración de depósitos: alta, baja, consulta y algoritmo de matchmaking. */
+/** Administración de depósitos: alta, baja, modificación, consulta y algoritmo de matchmaking. */
 @Service
 @Transactional
 public class DepositoService {
@@ -29,9 +29,34 @@ public class DepositoService {
   }
 
   public DepositoDTO crear(DepositoDTO dto) {
+    validarDatos(dto.nombre(), dto.capacidadMaxima());
     DepositoDTO creado = mapper.map(depositoRepository.save(mapper.map(dto)));
     log.info("Depósito {} creado: {}, capacidad {}", creado.id(), creado.nombre(), creado.capacidadMaxima());
     return creado;
+  }
+
+  /**
+   * Modificación completa de los datos propios del depósito: lo que no se envía queda vacío.
+   * El stock y el algoritmo de matchmaking no cambian, este último tiene su propia operación.
+   */
+  public DepositoDTO modificar(String depositoID, DepositoDTO dto) {
+    validarDatos(dto.nombre(), dto.capacidadMaxima());
+    Deposito deposito = obtener(depositoID);
+    deposito.actualizarDatos(dto.nombre(), dto.direccion(), dto.capacidadMaxima());
+    depositoRepository.save(deposito);
+    log.info("Depósito {} modificado: {}, capacidad {}", depositoID, dto.nombre(), dto.capacidadMaxima());
+    return mapper.map(deposito);
+  }
+
+  /** El nombre es obligatorio, y una capacidad negativa no tiene sentido. Sin capacidad no hay límite. */
+  private void validarDatos(String nombre, Integer capacidadMaxima) {
+    if (nombre == null || nombre.isBlank()) {
+      throw new SolicitudInvalidaException("El nombre del depósito es obligatorio");
+    }
+    if (capacidadMaxima != null && capacidadMaxima < 0) {
+      throw new SolicitudInvalidaException(
+              "La capacidad máxima no puede ser negativa, llegó " + capacidadMaxima);
+    }
   }
 
   @Transactional(readOnly = true)
@@ -46,8 +71,9 @@ public class DepositoService {
 
   public DepositoDTO eliminar(String depositoID) {
     Deposito deposito = obtener(depositoID);
+    deposito.verificarQueSePuedeEliminar();
     depositoRepository.delete(deposito);
-    log.info("Depósito {} eliminado junto con {} paquetes en stock", depositoID, deposito.getStock().size());
+    log.info("Depósito {} eliminado", depositoID);
     return mapper.map(deposito);
   }
 

@@ -1,10 +1,12 @@
 package ar.edu.utn.dds.k3003.service;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
 import ar.edu.utn.dds.k3003.clients.DonacionesClient;
 import ar.edu.utn.dds.k3003.clients.EntidadesClient;
 import ar.edu.utn.dds.k3003.clients.EstadoDonacionRequest;
+import ar.edu.utn.dds.k3003.exceptions.OperacionNoPermitidaException;
 import ar.edu.utn.dds.k3003.model.Asignacion;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +45,7 @@ public class EntregaService {
 
   public void reportar(PaqueteDTO paquete) {
     Asignacion asignacion = asignacionService.obtenerPorPaqueteID(paquete.id());
+    verificarQueNoSeEntregoYa(asignacion, paquete);
     log.info("Entrega del paquete {}: donación {}, necesidad {}, {} unidades",
             paquete.id(), paquete.donacionID(), asignacion.getNecesidadID(), paquete.cantidad());
 
@@ -53,6 +56,18 @@ public class EntregaService {
     metricas.entregaCompletada();
     log.info("Entrega del paquete {} completada. Necesidad satisfecha: {}. Donación aceptada: {}",
             paquete.id(), necesidadSatisfecha, donacionActualizada);
+  }
+
+  /**
+   * Una asignación pasa de ASIGNADA a COMPLETADA una sola vez. Aceptar una segunda entrega
+   * volvería a satisfacer la necesidad en Entidades y la contaría dos veces.
+   */
+  private void verificarQueNoSeEntregoYa(Asignacion asignacion, PaqueteDTO paquete) {
+    if (asignacion.getEstado() == EstadoAsginacionEnum.COMPLETADA) {
+      log.warn("Entrega repetida rechazada: el paquete {} ya fue entregado", paquete.id());
+      throw new OperacionNoPermitidaException(
+              "La entrega del paquete " + paquete.id() + " ya fue reportada");
+    }
   }
 
   /**

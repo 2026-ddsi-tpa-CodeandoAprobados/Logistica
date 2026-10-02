@@ -5,6 +5,7 @@ import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.DonacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.controllers.docs.ErrorCapacidadInsuficiente;
 import ar.edu.utn.dds.k3003.controllers.docs.ErrorNoEncontrado;
+import ar.edu.utn.dds.k3003.controllers.docs.ErrorOperacionNoPermitida;
 import ar.edu.utn.dds.k3003.controllers.docs.ErrorSolicitudInvalida;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
 import ar.edu.utn.dds.k3003.messaging.AltaAsignacionRequest;
@@ -55,9 +56,10 @@ public class LogisticaController {
 
     @Schema(description = "Algoritmo de matchmaking a usar en el depósito.")
     public record AlgoritmoRequest(
-            @Schema(description = "SUB_ATENDIDOS: la necesidad con mayor faltante. "
-                    + "PRIORIDAD: igual que SUB_ATENDIDOS por ahora. "
-                    + "PRIORIDAD_POR_SCORE: urgencia dividida por el ratio de cobertura.",
+            @Schema(description = "SUB_ATENDIDOS y PRIORIDAD aplican \"Prioridad a sub-atendidos\": "
+                    + "eligen la necesidad más alejada de su cantidad objetivo. "
+                    + "PRIORIDAD_POR_SCORE aplica \"Prioridad por score\": urgencia dividida por el "
+                    + "nivel de cobertura, eligiendo el valor más alto.",
                     example = "PRIORIDAD_POR_SCORE") TipoAlgoritmoEnum algoritmo) {}
 
     // ---------------- DEPOSITOS ----------------
@@ -75,7 +77,8 @@ public class LogisticaController {
     @Operation(tags = "Depósitos", summary = "Crea un depósito",
             description = "Devuelve el depósito creado con su id, que es el que hay que usar al "
                     + "enviar donaciones. Nace sin algoritmo, así que usa SUB_ATENDIDOS hasta que "
-                    + "se configure otro.")
+                    + "se configure otro. El nombre es obligatorio y la capacidad no puede ser "
+                    + "negativa. Una capacidad vacía significa sin límite.")
     @ApiResponse(responseCode = "201", description = "Depósito creado.",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = DepositoDTO.class)))
     @ErrorSolicitudInvalida
@@ -103,11 +106,35 @@ public class LogisticaController {
         return ResponseEntity.ok(fachada.buscarDepositoPorID(id));
     }
 
+    @Operation(tags = "Depósitos", summary = "Modifica los datos de un depósito",
+            description = """
+                    Reemplaza el nombre, la dirección y la capacidad máxima. Lo que no se envíe \
+                    queda vacío, y una capacidad vacía significa sin límite. El stock y el algoritmo \
+                    de matchmaking no cambian: el algoritmo tiene su propia operación.
+
+                    La capacidad nueva no puede quedar por debajo de las unidades que el depósito \
+                    ya almacena.""")
+    @ApiResponse(responseCode = "200", description = "Depósito modificado.",
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = DepositoDTO.class)))
+    @ErrorSolicitudInvalida
+    @ErrorNoEncontrado
+    @ErrorOperacionNoPermitida
+    @PutMapping("/depositos/{id}")
+    public ResponseEntity<DepositoDTO> modificarDeposito(
+            @Parameter(description = "Id numérico del depósito.", example = "1") @PathVariable String id,
+            @RequestBody DepositoRequest request) {
+        DepositoDTO cambios = new DepositoDTO(
+                null, null, request.nombre(), request.direccion(), request.capacidadMaxima(), new ArrayList<>());
+        return ResponseEntity.ok(fachada.modificarDeposito(id, cambios));
+    }
+
     @Operation(tags = "Depósitos", summary = "Elimina un depósito",
-            description = "Elimina también los paquetes que tenga en stock.")
+            description = "Solo se puede eliminar un depósito vacío. Con unidades en stock responde "
+                    + "409: la baja destruiría el registro de lo almacenado.")
     @ApiResponse(responseCode = "204", description = "Depósito eliminado.")
     @ErrorSolicitudInvalida
     @ErrorNoEncontrado
+    @ErrorOperacionNoPermitida
     @DeleteMapping("/depositos/{id}")
     public ResponseEntity<Void> eliminarDeposito(
             @Parameter(description = "Id numérico del depósito.", example = "1") @PathVariable String id) {
@@ -202,10 +229,11 @@ public class LogisticaController {
     @Operation(tags = "Entregas", summary = "Reporta la entrega de un paquete",
             description = "Notifica a Donadores y Entidades que se satisfizo la necesidad, "
                     + "actualiza la donación a ACEPTADA en Donaciones y marca la asignación "
-                    + "como COMPLETADA.")
+                    + "como COMPLETADA. Una entrega se reporta una sola vez: repetirla responde 409.")
     @ApiResponse(responseCode = "201", description = "Entrega registrada.")
     @ErrorSolicitudInvalida
     @ErrorNoEncontrado
+    @ErrorOperacionNoPermitida
     @PostMapping("/entregas")
     public ResponseEntity<Void> registrarEntrega(@RequestBody PaqueteRequest request) {
         PaqueteDTO paqueteDTO = fachada.buscarPaquetePorID(request.paqueteId());

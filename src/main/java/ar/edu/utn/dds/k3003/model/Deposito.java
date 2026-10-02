@@ -3,6 +3,7 @@ package ar.edu.utn.dds.k3003.model;
 import jakarta.persistence.*;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.CapacidadInsuficienteException;
+import ar.edu.utn.dds.k3003.exceptions.OperacionNoPermitidaException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -108,6 +109,32 @@ public class Deposito {
             restante -= consumido;
         }
         return consumidoPorDonacion;
+    }
+
+    /**
+     * Modifica los datos propios del depósito. La capacidad no puede quedar por debajo de lo que
+     * ya almacena: dejaría al depósito sobrepasado, con un stock que no entra en él.
+     * El stock y el algoritmo de matchmaking no se tocan desde acá.
+     */
+    public void actualizarDatos(String nombre, String direccion, Integer nuevaCapacidad) {
+        if (nuevaCapacidad != null && nuevaCapacidad < unidadesOcupadas()) {
+            throw new OperacionNoPermitidaException("No se puede reducir la capacidad del depósito "
+                    + id + " a " + nuevaCapacidad + ": ya almacena " + unidadesOcupadas() + " unidades");
+        }
+        this.nombre = nombre;
+        this.direccion = direccion;
+        this.capacidadMaxima = nuevaCapacidad;
+    }
+
+    /**
+     * Un depósito sólo se elimina vacío. Con stock, la baja destruiría el registro de lo que
+     * hay almacenado, mientras las donaciones de origen siguen vigentes en el resto del sistema.
+     */
+    public void verificarQueSePuedeEliminar() {
+        if (unidadesOcupadas() > 0) {
+            throw new OperacionNoPermitidaException("No se puede eliminar el depósito " + id
+                    + ": todavía tiene " + unidadesOcupadas() + " unidades en stock");
+        }
     }
 
     // ---------------- Accesores ----------------

@@ -113,6 +113,10 @@ public class Fachada implements FachadaLogistica {
     return depositoService.crear(deposito);
   }
 
+  public DepositoDTO modificarDeposito(String depositoID, DepositoDTO deposito) {
+    return depositoService.modificar(depositoID, deposito);
+  }
+
   @Override
   public DepositoDTO buscarDepositoPorID(String depositoID) {
     return depositoService.buscarPorID(depositoID);

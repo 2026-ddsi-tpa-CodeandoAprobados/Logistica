@@ -105,11 +105,12 @@ causa de que el módulo Donaciones reciba un 400 opaco cuando el depósito está
 
 ## 4. Funcionalidades incompletas
 
-- **`PRIORIDAD` no tiene comportamiento propio.** En el `switch` comparte rama con
-  `SUB_ATENDIDOS`, así que de los tres algoritmos configurables hay dos efectivos. El
-  enunciado pide configurar el matchmaking de cada depósito como funcionalidad interna.
-- **El ABM de depósito está a medias.** Hay alta, baja, consulta y cambio de algoritmo,
-  pero no hay modificación de nombre, dirección ni capacidad.
+- ~~**`PRIORIDAD` no tiene comportamiento propio.**~~ **Descartado: era una suposición sin base.**
+  Los enunciados definen solo dos algoritmos: "Prioridad a sub-atendidos" en la entrega 1 y
+  "Prioridad por score" en la 2. Ninguno define un tercero. Que `PRIORIDAD` comparta rama con
+  `SUB_ATENDIDOS` es coherente con lo pedido, así que se dejó como está.
+- ~~**El ABM de depósito está a medias.**~~ **Resuelto.** La entrega 1 exige "alta, baja y
+  modificación de depósitos". Faltaba la modificación, y se agregó con `PUT /depositos/{id}`.
 - **La baja de depósito no valida nada.** Si el depósito tiene stock, la cascada borra
   los paquetes sin avisar.
 - **No hay un solo test.** `src/test/java` está vacío.
@@ -151,7 +152,7 @@ tienen valor por defecto, así que la aplicación no arranca en una máquina lim
 | Log centralizado | Reemplazar las salidas por consola, agregar el appender y el filtro de trazas, e instrumentar los flujos principales. |
 | Métricas de dominio | Los contadores actuales cuentan invocaciones, no unidades. Conviene medir ocupación de depósito, unidades asignadas y donaciones que no encuentran necesidad. |
 | Alarmas | Se configuran sobre las métricas de negocio, no en el código. |
-| Completar el core business | ABM de depósito completo, algoritmo `PRIORIDAD`, validación de baja y errores de negocio tipados. |
+| Completar el core business | Hecho: modificación de depósito, validación del alta, baja solo con el depósito vacío, rechazo de entrega repetida y errores de negocio tipados. |
 | Modularización | Partir la fachada y devolverle comportamiento al dominio. |
 | Diagramas de secuencia | Seis flujos a nivel de servicios, en `docs/`. |
 
@@ -187,6 +188,8 @@ tienen valor por defecto, así que la aplicación no arranca en una máquina lim
    traza a través de la cola y eventos de negocio registrados. Ver
    [logging-y-trazas.md](logging-y-trazas.md).
 5. Métricas de dominio y alarmas.
-6. Completar ABM y algoritmo de matchmaking.
+6. ~~Completar ABM~~ **hecho.** Modificación de depósito, validación del alta, baja solo con
+   el depósito vacío y rechazo de una entrega repetida. Cada regla responde con su código:
+   400 por datos inválidos, 404 si no existe y 409 si el estado actual no la permite.
 7. MCP Server contra la API terminada.
 8. Documentación y diagramas.
