@@ -53,7 +53,7 @@ public class EntregaService {
     boolean donacionActualizada = marcarDonacionAceptada(paquete.donacionID());
 
     asignacionService.completar(asignacion);
-    metricas.entregaCompletada();
+    metricas.entregaCompletada(paquete.cantidad() == null ? 0 : paquete.cantidad());
     log.info("Entrega del paquete {} completada. Necesidad satisfecha: {}. Donación aceptada: {}",
             paquete.id(), necesidadSatisfecha, donacionActualizada);
   }
@@ -86,6 +86,7 @@ public class EntregaService {
     } catch (Exception e) {
       log.warn("No se pudo satisfacer la necesidad {} en Entidades ({} unidades): {}",
               necesidadID, cantidad, e.getMessage());
+      metricas.notificacionFallida("entidades");
       return false;
     }
   }
@@ -102,6 +103,7 @@ public class EntregaService {
     } catch (Exception e) {
       log.warn("No se pudo marcar la donación {} como ACEPTADA en Donaciones: {}",
               donacionID, e.getMessage());
+      metricas.notificacionFallida("donaciones");
       return false;
     }
   }

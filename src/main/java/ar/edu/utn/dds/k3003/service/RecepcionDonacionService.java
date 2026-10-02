@@ -41,6 +41,7 @@ public class RecepcionDonacionService {
   private final AsignacionService asignacionService;
   private final Matchmaker matchmaker;
   private final LogisticaDataMapper mapper;
+  private final MetricasLogistica metricas;
 
   @Autowired(required = false)
   private EntidadesClient entidadesClient;
@@ -52,12 +53,14 @@ public class RecepcionDonacionService {
                                   StockService stockService,
                                   AsignacionService asignacionService,
                                   Matchmaker matchmaker,
-                                  LogisticaDataMapper mapper) {
+                                  LogisticaDataMapper mapper,
+                                  MetricasLogistica metricas) {
     this.depositoService = depositoService;
     this.stockService = stockService;
     this.asignacionService = asignacionService;
     this.matchmaker = matchmaker;
     this.mapper = mapper;
+    this.metricas = metricas;
   }
 
   public DepositoDTO recibir(DonacionDTO donacion) {
@@ -69,6 +72,7 @@ public class RecepcionDonacionService {
     Deposito deposito = depositoService.obtener(donacion.depositoID());
     int unidades = totalDeUnidades(donacion);
     verificarEspacio(deposito, donacion, unidades);
+    metricas.donacionRecibida(unidades);
 
     // Entrega 4 - Parte B: con mensajería activa se encola y un Worker asigna de forma async,
     // así que el stock que se devuelve todavía no refleja esta donación.
@@ -93,6 +97,7 @@ public class RecepcionDonacionService {
       deposito.verificarEspacioPara(unidades);
     } catch (CapacidadInsuficienteException e) {
       log.warn("Donación {} rechazada por capacidad: {}", donacion.id(), e.getMessage());
+      metricas.donacionRechazadaPorCapacidad();
       throw e;
     }
   }

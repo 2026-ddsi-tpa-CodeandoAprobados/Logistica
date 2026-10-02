@@ -42,7 +42,7 @@ public class AsignacionService {
                                              int cantidad, String necesidadID) {
     AsignacionDTO creada = crear(donacionID, productoID, cantidad, necesidadID,
             OrigenAsignacionEnum.MATCHMAKING);
-    metricas.asignacionPorMatchmaking();
+    metricas.asignacionPorMatchmaking(cantidad);
     return creada;
   }
 
@@ -51,7 +51,7 @@ public class AsignacionService {
                                             int cantidad, String necesidadID) {
     AsignacionDTO creada = crear(donacionID, productoID, cantidad, necesidadID,
             OrigenAsignacionEnum.SOLICITUD_DONADORES);
-    metricas.asignacionPorSolicitud();
+    metricas.asignacionPorSolicitud(cantidad);
     return creada;
   }
 
