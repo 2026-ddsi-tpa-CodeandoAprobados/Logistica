@@ -54,6 +54,19 @@ Para el mensaje de cada monitor conviene indicar qué hacer. Por ejemplo, para e
 depósito supera el 90 % de su capacidad. Revisar `GET /depositos` y ampliar la capacidad con
 `PUT /depositos/{id}` o derivar donaciones a otro depósito".
 
+## Importar el tablero y los monitores
+
+La carpeta `docs/datadog/` tiene las definiciones listas para importar:
+
+- `dashboard-logistica.json`: tablero con el estado de los depósitos, los contadores y el resumen de las alarmas.
+  En Datadog: Dashboards > New Dashboard, y en el menú de configuración del tablero, "Import dashboard JSON".
+- `monitor-ocupacion.json`, `monitor-rechazos.json` y `monitor-avisos-fallidos.json`: los tres monitores de la tabla anterior.
+  En Datadog: Monitors > New Monitor, y "Import from JSON" en la parte superior de la pantalla.
+
+Los monitores importados no traen destinatario: hay que agregar al final del mensaje el correo de
+notificación con `@correo`. Los tres llevan la etiqueta `modulo:logistica`, que es la que usa el
+resumen de alarmas del tablero.
+
 ## Cómo comprobar que una alarma funciona
 
 La forma más directa es provocar el evento y mirar que el monitor cambie de estado. Con la API
