@@ -1,5 +1,6 @@
 package ar.edu.utn.dds.k3003.service;
 
+import ar.edu.utn.dds.k3003.messaging.eventos.PublicadorEventos;
 import ar.edu.utn.dds.k3003.repositories.AsignacionRepository;
 import ar.edu.utn.dds.k3003.repositories.DepositoRepository;
 import ar.edu.utn.dds.k3003.repositories.PaqueteRepository;
@@ -18,12 +19,16 @@ public class MantenimientoService {
   private final PaqueteRepository paqueteRepository;
   private final DepositoRepository depositoRepository;
 
+  private final PublicadorEventos eventos;
+
   public MantenimientoService(AsignacionRepository asignacionRepository,
                               PaqueteRepository paqueteRepository,
-                              DepositoRepository depositoRepository) {
+                              DepositoRepository depositoRepository,
+                              PublicadorEventos eventos) {
     this.asignacionRepository = asignacionRepository;
     this.paqueteRepository = paqueteRepository;
     this.depositoRepository = depositoRepository;
+    this.eventos = eventos;
   }
 
   /** Borra en orden de dependencia: primero las asignaciones, después paquetes y depósitos. */
@@ -31,5 +36,6 @@ public class MantenimientoService {
     asignacionRepository.deleteAll();
     paqueteRepository.deleteAll();
     depositoRepository.deleteAll();
+    eventos.baseLimpiada();
   }
 }

@@ -7,6 +7,7 @@ import ar.edu.utn.dds.k3003.model.Paquete;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
 import ar.edu.utn.dds.k3003.repositories.PaqueteRepository;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,16 @@ public class PaqueteService {
   @Transactional(readOnly = true)
   public List<PaqueteDTO> buscarTodos() {
     return paqueteRepository.findAll().stream().map(mapper::map).toList();
+  }
+
+  /** Busca un paquete sin fallar: un id que no existe o no es numérico devuelve vacío. */
+  @Transactional(readOnly = true)
+  public Optional<Paquete> obtenerOpcional(String paqueteID) {
+    try {
+      return paqueteRepository.findById(Integer.valueOf(paqueteID));
+    } catch (NumberFormatException e) {
+      return Optional.empty();
+    }
   }
 
   /** Crea el paquete de una porción de donación que se va a asignar. */

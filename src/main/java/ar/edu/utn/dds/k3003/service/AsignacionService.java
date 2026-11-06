@@ -4,10 +4,12 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.OrigenAsignacionEnum;
 import ar.edu.utn.dds.k3003.exceptions.RecursoNoEncontradoException;
+import ar.edu.utn.dds.k3003.messaging.eventos.PublicadorEventos;
 import ar.edu.utn.dds.k3003.model.Asignacion;
 import ar.edu.utn.dds.k3003.model.Paquete;
 import ar.edu.utn.dds.k3003.repositories.AsignacionRepository;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,15 +28,18 @@ public class AsignacionService {
   private final PaqueteService paqueteService;
   private final LogisticaDataMapper mapper;
   private final MetricasLogistica metricas;
+  private final PublicadorEventos eventos;
 
   public AsignacionService(AsignacionRepository asignacionRepository,
                            PaqueteService paqueteService,
                            LogisticaDataMapper mapper,
-                           MetricasLogistica metricas) {
+                           MetricasLogistica metricas,
+                           PublicadorEventos eventos) {
     this.asignacionRepository = asignacionRepository;
     this.paqueteService = paqueteService;
     this.mapper = mapper;
     this.metricas = metricas;
+    this.eventos = eventos;
   }
 
   /** La necesidad la eligió el matchmaking al recibir la donación. */
@@ -60,17 +65,23 @@ public class AsignacionService {
     Paquete paquete = paqueteService.crear(donacionID, productoID, cantidad);
     Asignacion asignacion = asignacionRepository.save(
             new Asignacion(String.valueOf(paquete.getId()), necesidadID, origen));
+    eventos.asignacionCreada(asignacion, paquete);
     return mapper.map(asignacion);
   }
 
   /** Alta para un paquete que ya existe, usada por el matchmaking de la interfaz de cátedra. */
   public AsignacionDTO asignarPaqueteExistente(String paqueteID, String necesidadID) {
-    return mapper.map(asignacionRepository.save(new Asignacion(paqueteID, necesidadID)));
+    Asignacion asignacion = asignacionRepository.save(new Asignacion(paqueteID, necesidadID));
+    eventos.asignacionCreada(asignacion, paqueteService.obtenerOpcional(paqueteID).orElse(null));
+    return mapper.map(asignacion);
   }
 
   public void completar(Asignacion asignacion) {
     asignacion.setEstado(EstadoAsginacionEnum.COMPLETADA);
     asignacionRepository.save(asignacion);
+    // La asignación no guarda cuándo se completó: ese momento viaja en el evento.
+    eventos.entregaCompletada(asignacion,
+            paqueteService.obtenerOpcional(asignacion.getPaqueteID()).orElse(null), Instant.now());
   }
 
   @Transactional(readOnly = true)

@@ -4,6 +4,7 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.RecursoNoEncontradoException;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
+import ar.edu.utn.dds.k3003.messaging.eventos.PublicadorEventos;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.repositories.DepositoRepository;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
@@ -22,15 +23,20 @@ public class DepositoService {
 
   private final DepositoRepository depositoRepository;
   private final LogisticaDataMapper mapper;
+  private final PublicadorEventos eventos;
 
-  public DepositoService(DepositoRepository depositoRepository, LogisticaDataMapper mapper) {
+  public DepositoService(DepositoRepository depositoRepository, LogisticaDataMapper mapper,
+                         PublicadorEventos eventos) {
     this.depositoRepository = depositoRepository;
     this.mapper = mapper;
+    this.eventos = eventos;
   }
 
   public DepositoDTO crear(DepositoDTO dto) {
     validarDatos(dto.nombre(), dto.capacidadMaxima());
-    DepositoDTO creado = mapper.map(depositoRepository.save(mapper.map(dto)));
+    Deposito guardado = depositoRepository.save(mapper.map(dto));
+    DepositoDTO creado = mapper.map(guardado);
+    eventos.depositoCreado(guardado);
     log.info("Depósito {} creado: {}, capacidad {}", creado.id(), creado.nombre(), creado.capacidadMaxima());
     return creado;
   }
@@ -44,6 +50,7 @@ public class DepositoService {
     Deposito deposito = obtener(depositoID);
     deposito.actualizarDatos(dto.nombre(), dto.direccion(), dto.capacidadMaxima());
     depositoRepository.save(deposito);
+    eventos.depositoModificado(deposito);
     log.info("Depósito {} modificado: {}, capacidad {}", depositoID, dto.nombre(), dto.capacidadMaxima());
     return mapper.map(deposito);
   }
@@ -73,6 +80,7 @@ public class DepositoService {
     Deposito deposito = obtener(depositoID);
     deposito.verificarQueSePuedeEliminar();
     depositoRepository.delete(deposito);
+    eventos.depositoEliminado(deposito);
     log.info("Depósito {} eliminado", depositoID);
     return mapper.map(deposito);
   }
@@ -81,6 +89,7 @@ public class DepositoService {
     Deposito deposito = obtener(depositoID);
     deposito.setAlgoritmo(algoritmo);
     depositoRepository.save(deposito);
+    eventos.algoritmoConfigurado(deposito);
     log.info("Depósito {}: algoritmo de matchmaking configurado en {}", depositoID, algoritmo);
   }
 

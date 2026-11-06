@@ -3,6 +3,7 @@ package ar.edu.utn.dds.k3003.service;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
 import ar.edu.utn.dds.k3003.exceptions.SolicitudInvalidaException;
+import ar.edu.utn.dds.k3003.messaging.eventos.PublicadorEventos;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
 import java.util.ArrayList;
@@ -28,21 +29,25 @@ public class StockService {
   private final AsignacionService asignacionService;
   private final LogisticaDataMapper mapper;
   private final MetricasLogistica metricas;
+  private final PublicadorEventos eventos;
 
   public StockService(DepositoService depositoService,
                       AsignacionService asignacionService,
                       LogisticaDataMapper mapper,
-                      MetricasLogistica metricas) {
+                      MetricasLogistica metricas,
+                      PublicadorEventos eventos) {
     this.depositoService = depositoService;
     this.asignacionService = asignacionService;
     this.mapper = mapper;
     this.metricas = metricas;
+    this.eventos = eventos;
   }
 
   /** Guarda unidades en el stock del depósito, respetando su capacidad máxima. */
   public void guardar(Deposito deposito, String donacionID, String productoID, int cantidad) {
     deposito.recibirEnStock(donacionID, productoID, cantidad);
     depositoService.guardar(deposito);
+    eventos.stockActualizado(deposito);
     metricas.paqueteGuardadoEnStock();
   }
 
@@ -105,6 +110,7 @@ public class StockService {
                 consumidoPorDonacion.merge(donacionID, unidades, Integer::sum));
         restante -= consumido.values().stream().mapToInt(Integer::intValue).sum();
         depositoService.guardar(deposito);
+        eventos.stockActualizado(deposito);
       }
       if (restante == 0) {
         break;
