@@ -1,0 +1,313 @@
+{
+  "title": "DonaTrack - Logística",
+  "description": "Métricas de negocio del módulo Logística (Entrega 5).",
+  "layout_type": "ordered",
+  "reflow_type": "auto",
+  "template_variables": [],
+  "widgets": [
+    {
+      "definition": {
+        "type": "note",
+        "background_color": "white",
+        "font_size": "14",
+        "text_align": "left",
+        "show_tick": false,
+        "tick_pos": "50%",
+        "tick_edge": "left",
+        "content": "## Logística\nDepósitos, donaciones, asignaciones y entregas. Todas las métricas llevan la etiqueta `modulo:logistica`. Los contadores se reportan por intervalos de un minuto."
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Unidades en stock",
+        "title_size": "16",
+        "title_align": "left",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "q": "max:logistica.unidades_en_stock{modulo:logistica}",
+            "aggregator": "last"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Capacidad total",
+        "title_size": "16",
+        "title_align": "left",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "q": "max:logistica.capacidad_total{modulo:logistica}",
+            "aggregator": "last"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Ocupación del depósito más lleno",
+        "title_size": "16",
+        "title_align": "left",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "q": "max:logistica.ocupacion_maxima{modulo:logistica} * 100",
+            "aggregator": "last"
+          }
+        ],
+        "custom_unit": "%"
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Donaciones rechazadas (última hora)",
+        "title_size": "16",
+        "title_align": "left",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "q": "sum:logistica.donaciones_rechazadas{modulo:logistica}.as_count()",
+            "aggregator": "last"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Ocupación del depósito más lleno (%)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "max:logistica.ocupacion_maxima{modulo:logistica} * 100",
+            "display_type": "line",
+            "metadata": [
+              {
+                "expression": "max:logistica.ocupacion_maxima{modulo:logistica} * 100",
+                "alias_name": "ocupación máxima"
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "value": "y > 90",
+            "display_type": "error dashed",
+            "label": "alarma 90%"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Unidades en stock",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "max:logistica.unidades_en_stock{modulo:logistica}",
+            "display_type": "line",
+            "metadata": [
+              {
+                "expression": "max:logistica.unidades_en_stock{modulo:logistica}",
+                "alias_name": "unidades en stock"
+              }
+            ]
+          },
+          {
+            "q": "max:logistica.capacidad_total{modulo:logistica}",
+            "display_type": "line",
+            "metadata": [
+              {
+                "expression": "max:logistica.capacidad_total{modulo:logistica}",
+                "alias_name": "capacidad total"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Donaciones rechazadas por capacidad",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.donaciones_rechazadas{modulo:logistica} by {motivo}.as_count()",
+            "display_type": "bars"
+          }
+        ],
+        "markers": [
+          {
+            "value": "y > 2",
+            "display_type": "error dashed",
+            "label": "alarma"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Donaciones y unidades recibidas",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.donaciones_recibidas{modulo:logistica}.as_count()",
+            "display_type": "bars",
+            "metadata": [
+              {
+                "expression": "sum:logistica.donaciones_recibidas{modulo:logistica}.as_count()",
+                "alias_name": "donaciones"
+              }
+            ]
+          },
+          {
+            "q": "sum:logistica.unidades_recibidas{modulo:logistica}.as_count()",
+            "display_type": "bars",
+            "metadata": [
+              {
+                "expression": "sum:logistica.unidades_recibidas{modulo:logistica}.as_count()",
+                "alias_name": "unidades"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Unidades asignadas por origen",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.unidades_asignadas{modulo:logistica} by {origen}.as_count()",
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Entregas completadas y unidades entregadas",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.entregas_completadas{modulo:logistica}.as_count()",
+            "display_type": "bars",
+            "metadata": [
+              {
+                "expression": "sum:logistica.entregas_completadas{modulo:logistica}.as_count()",
+                "alias_name": "entregas"
+              }
+            ]
+          },
+          {
+            "q": "sum:logistica.unidades_entregadas{modulo:logistica}.as_count()",
+            "display_type": "bars",
+            "metadata": [
+              {
+                "expression": "sum:logistica.unidades_entregadas{modulo:logistica}.as_count()",
+                "alias_name": "unidades"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Avisos fallidos a otros módulos",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.notificaciones_fallidas{modulo:logistica} by {destino}.as_count()",
+            "display_type": "bars"
+          }
+        ],
+        "markers": [
+          {
+            "value": "y > 0",
+            "display_type": "error dashed",
+            "label": "alarma"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Paquetes guardados en stock",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "requests": [
+          {
+            "q": "sum:logistica.paquetes_en_stock{modulo:logistica}.as_count()",
+            "display_type": "bars",
+            "metadata": [
+              {
+                "expression": "sum:logistica.paquetes_en_stock{modulo:logistica}.as_count()",
+                "alias_name": "paquetes"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "manage_status",
+        "title": "Alarmas de Logística",
+        "title_size": "16",
+        "title_align": "left",
+        "display_format": "countsAndList",
+        "color_preference": "text",
+        "hide_zero_counts": false,
+        "show_last_triggered": true,
+        "show_priority": false,
+        "query": "tag:modulo:logistica",
+        "sort": "status,asc",
+        "count": 50,
+        "start": 0,
+        "summary_type": "monitors"
+      }
+    }
+  ]
+}

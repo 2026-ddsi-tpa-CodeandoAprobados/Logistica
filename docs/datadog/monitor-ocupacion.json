@@ -1,0 +1,22 @@
+{
+  "name": "Logística: un depósito supera el 90% de su capacidad",
+  "type": "metric alert",
+  "query": "max(last_5m):max:logistica.ocupacion_maxima{modulo:logistica} > 0.9",
+  "message": "Un depósito está casi lleno. Revisar GET /depositos y ampliar la capacidad con PUT /depositos/{id}, o derivar donaciones a otro depósito.",
+  "tags": [
+    "modulo:logistica",
+    "entrega:5"
+  ],
+  "options": {
+    "thresholds": {
+      "critical": 0.9
+    },
+    "notify_no_data": false,
+    "notify_audit": false,
+    "require_full_window": false,
+    "include_tags": true,
+    "renotify_interval": 0,
+    "evaluation_delay": 60
+  },
+  "priority": null
+}
