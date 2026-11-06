@@ -64,11 +64,11 @@ sequenceDiagram
     alt el depósito no tiene espacio
         Log-->>Don: 409 capacidad insuficiente
         Note over Log: suma donaciones_rechazadas (alarma)
-        Don-->>Cli: error, la donación no se registra
+        Don-->>Cli: 404, la donación no se registra
     else hay espacio
         Log->>MQ: publica la donación, con la traza
         Log-->>Don: 201
-        Don-->>Cli: 201 donación INGRESADA
+        Don-->>Cli: 202 donación INGRESADA
         MQ->>Wk: entrega el mensaje
         loop por cada producto de la donación
             Wk->>DyE: GET /necesidades/{productoID}
